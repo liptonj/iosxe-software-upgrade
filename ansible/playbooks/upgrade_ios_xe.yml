@@ -1,0 +1,193 @@
+---
+- name: Cisco IOS-XE 9300 Upgrade Playbook
+  hosts: switches
+  gather_facts: false
+  vars:
+    target_version: "17.15.04"
+    image_file: "cat9k_iosxe.17.15.04.SPA.bin"
+    required_space_mb: 2048
+    install_timeout: 1200
+    reboot_wait_timeout: 300
+
+  tasks:
+    - name: Gather facts from switch
+      cisco.ios.ios_facts:
+        gather_subset: hardware
+      register: facts_output
+
+    - name: Display current version
+      ansible.builtin.debug:
+        msg: "Current IOS-XE version is {{ facts_output.ansible_facts.ansible_net_version }}"
+
+    - name: Check if already at target version
+      ansible.builtin.debug:
+        msg: "Switch is already running target version {{ target_version }}. Skipping upgrade."
+      when: target_version in facts_output.ansible_facts.ansible_net_version
+
+    - name: End play if already at target version
+      ansible.builtin.meta: end_host
+      when: target_version in facts_output.ansible_facts.ansible_net_version
+
+    - name: Check boot mode (INSTALL vs BUNDLE)
+      cisco.ios.ios_command:
+        commands:
+          - show version | include INSTALL|BUNDLE
+      register: boot_mode_check
+
+    - name: Display boot mode
+      ansible.builtin.debug:
+        msg: "Boot mode output: {{ boot_mode_check.stdout[0] }}"
+
+    - name: Determine if in bundle mode
+      ansible.builtin.set_fact:
+        is_bundle_mode: "{{ 'BUNDLE' in boot_mode_check.stdout[0] }}"
+
+    - name: Clear old boot variables if in bundle mode
+      block:
+        - name: Get current boot system configuration
+          cisco.ios.ios_command:
+            commands:
+              - show running-config | include boot system
+          register: boot_config
+
+        - name: Display current boot configuration
+          ansible.builtin.debug:
+            msg: "Current boot configuration: {{ boot_config.stdout[0] }}"
+
+        - name: Clear all boot system variables
+          cisco.ios.ios_config:
+            lines:
+              - no boot system
+            save_when: modified
+          when: boot_config.stdout[0] | length > 0
+
+        - name: Confirm boot variables cleared
+          ansible.builtin.debug:
+            msg: "Old boot variables cleared. Install mode conversion will happen during install process."
+
+      when: is_bundle_mode | bool
+
+    - name: Check available flash space
+      cisco.ios.ios_command:
+        commands:
+          - dir flash: | include bytes free
+      register: flash_space_output
+
+    - name: Parse flash space
+      ansible.builtin.set_fact:
+        flash_free_bytes: "{{ flash_space_output.stdout[0] | regex_search('(\\d+) bytes free', '\\1') | first }}"
+
+    - name: Convert to MB
+      ansible.builtin.set_fact:
+        flash_free_mb: "{{ (flash_free_bytes | int / 1024 / 1024) | int }}"
+
+    - name: Display available flash space
+      ansible.builtin.debug:
+        msg: "Available flash space: {{ flash_free_mb }} MB (Required: {{ required_space_mb }} MB)"
+
+    - name: Fail if insufficient flash space
+      ansible.builtin.fail:
+        msg: "Insufficient flash space. Available: {{ flash_free_mb }} MB, Required: {{ required_space_mb }} MB"
+      when: flash_free_mb | int < required_space_mb | int
+
+    - name: Save running configuration to startup configuration
+      cisco.ios.ios_command:
+        commands:
+          - command: copy running-config startup-config
+            prompt: 'Destination filename \[startup-config\]\?'
+            answer: "\r"
+      register: save_config_output
+
+    - name: Display save config result
+      ansible.builtin.debug:
+        msg: "Configuration saved successfully"
+
+    - name: Remove inactive packages if in install mode (optional cleanup)
+      cisco.ios.ios_command:
+        commands:
+          - command: install remove inactive
+            prompt:
+              - 'Do you want to remove the above files\? \[y/n\]'
+            answer:
+              - 'y'
+      register: install_remove_output
+      vars:
+        ansible_command_timeout: 600
+      when: not (is_bundle_mode | bool)
+      ignore_errors: true
+
+    - name: Display cleanup result
+      ansible.builtin.debug:
+        msg: "{{ 'No old files found to clean.' if 'No extra package' in (install_remove_output.stdout[0] | default('')) else 'Old files removed successfully.' }}"
+      when: not (is_bundle_mode | bool) and install_remove_output is defined
+
+    - name: Transfer IOS-XE image via FTP
+      cisco.ios.ios_command:
+        commands:
+          - command: "copy ftp://{{ ftp_username }}:{{ ftp_password }}@{{ ftp_host }}/{{ image_file }} flash:{{ image_file }}"
+            prompt:
+              - 'Destination filename \[{{ image_file }}\]\?'
+            answer:
+              - "\r"
+      vars:
+        ansible_command_timeout: 900
+      register: ftp_transfer_output
+
+    - name: Display FTP transfer result
+      ansible.builtin.debug:
+        msg: "Image transfer completed"
+
+    - name: Install and activate new IOS-XE image
+      cisco.ios.ios_command:
+        commands:
+          - command: "install add file flash:{{ image_file }} activate commit"
+            prompt:
+              - 'This operation may require a reload of the system. Do you want to proceed\? \[y/n\]'
+            answer:
+              - 'y'
+      register: install_activate_output
+      vars:
+        ansible_command_timeout: "{{ install_timeout }}"
+
+    - name: Display install output
+      ansible.builtin.debug:
+        var: install_activate_output.stdout_lines
+
+    - name: Wait for switch to reload
+      ansible.builtin.pause:
+        seconds: "{{ reboot_wait_timeout }}"
+
+    - name: Wait for switch to become reachable
+      ansible.builtin.wait_for_connection:
+        delay: 60
+        timeout: 600
+
+    - name: Gather facts after upgrade
+      cisco.ios.ios_facts:
+        gather_subset: hardware
+      register: post_upgrade_facts
+
+    - name: Verify new version
+      ansible.builtin.debug:
+        msg: "Upgrade successful! New version is {{ post_upgrade_facts.ansible_facts.ansible_net_version }}"
+      when: target_version in post_upgrade_facts.ansible_facts.ansible_net_version
+
+    - name: Verify boot mode is now INSTALL
+      cisco.ios.ios_command:
+        commands:
+          - show version | include INSTALL
+      register: post_boot_mode
+
+    - name: Display post-upgrade boot mode
+      ansible.builtin.debug:
+        msg: "Post-upgrade boot mode: {{ post_boot_mode.stdout[0] }}"
+
+    - name: Fail if version verification fails
+      ansible.builtin.fail:
+        msg: "Upgrade verification failed. Expected {{ target_version }}, but got {{ post_upgrade_facts.ansible_facts.ansible_net_version }}"
+      when: target_version not in post_upgrade_facts.ansible_facts.ansible_net_version
+
+    - name: Final success message
+      ansible.builtin.debug:
+        msg: "IOS-XE upgrade to {{ target_version }} completed successfully. Switch is now in INSTALL mode."
+

@@ -1,0 +1,10 @@
+# Prevent AI from accessing sensitive files
+.vault_pass
+.vault_password
+vault_password.txt
+*password*
+*secret*
+*credential*
+.env
+.env.local
+

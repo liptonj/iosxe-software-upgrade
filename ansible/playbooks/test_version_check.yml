@@ -1,0 +1,72 @@
+---
+- name: Check IOS-XE Version and Boot Mode
+  hosts: switches
+  gather_facts: false
+  vars:
+    target_version: "17.15.04"
+
+  tasks:
+    - name: Gather hardware facts
+      cisco.ios.ios_facts:
+        gather_subset: hardware
+      register: facts_output
+
+    - name: Display current version
+      ansible.builtin.debug:
+        msg: |
+          Hostname: {{ ansible_net_hostname }}
+          Current Version: {{ facts_output.ansible_facts.ansible_net_version }}
+          Model: {{ facts_output.ansible_facts.ansible_net_model }}
+          Serial: {{ facts_output.ansible_facts.ansible_net_serialnum }}
+
+    - name: Check boot mode
+      cisco.ios.ios_command:
+        commands:
+          - show version | include INSTALL|BUNDLE
+      register: boot_mode_check
+
+    - name: Display boot mode
+      ansible.builtin.debug:
+        msg: "Boot Mode: {{ boot_mode_check.stdout[0] }}"
+
+    - name: Check if bundle mode
+      ansible.builtin.set_fact:
+        is_bundle_mode: "{{ 'BUNDLE' in boot_mode_check.stdout[0] }}"
+        is_install_mode: "{{ 'INSTALL' in boot_mode_check.stdout[0] }}"
+
+    - name: Boot mode status
+      ansible.builtin.debug:
+        msg: |
+          Bundle Mode: {{ is_bundle_mode }}
+          Install Mode: {{ is_install_mode }}
+
+    - name: Check flash space
+      cisco.ios.ios_command:
+        commands:
+          - dir flash: | include bytes free
+      register: flash_space
+
+    - name: Parse and display flash space
+      ansible.builtin.set_fact:
+        flash_free_bytes: "{{ flash_space.stdout[0] | regex_search('(\\d+) bytes free', '\\1') | first }}"
+
+    - name: Display flash space in MB
+      ansible.builtin.debug:
+        msg: "Available Flash Space: {{ (flash_free_bytes | int / 1024 / 1024) | int }} MB"
+
+    - name: Check if upgrade needed
+      ansible.builtin.debug:
+        msg: "{{ 'Upgrade needed: ' ~ target_version ~ ' not found in current version' if target_version not in facts_output.ansible_facts.ansible_net_version else 'Already at target version ' ~ target_version }}"
+
+    - name: Summary
+      ansible.builtin.debug:
+        msg: |
+          ===========================================
+          Switch: {{ ansible_net_hostname }}
+          Current: {{ facts_output.ansible_facts.ansible_net_version }}
+          Target: {{ target_version }}
+          Boot Mode: {{ 'Bundle' if is_bundle_mode else 'Install' }}
+          Flash Free: {{ (flash_free_bytes | int / 1024 / 1024) | int }} MB
+          Upgrade Needed: {{ 'Yes' if target_version not in facts_output.ansible_facts.ansible_net_version else 'No' }}
+          ===========================================
+
