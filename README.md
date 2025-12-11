@@ -4,12 +4,14 @@ Automated upgrade playbook for Cisco Catalyst 9300 switches running IOS-XE using
 
 ## Features
 
+- ✅ **Automatic configuration backup** before upgrades
 - ✅ Automated version checking and upgrade
 - ✅ Bundle to Install mode conversion
 - ✅ Flash space verification
 - ✅ Old boot variable cleanup
 - ✅ FTP-based image transfer
 - ✅ Post-upgrade verification
+- ✅ Standalone backup playbook for anytime backups
 - ✅ Uses only native `cisco.ios` collection modules
 
 ## Prerequisites
@@ -111,34 +113,109 @@ ansible-playbook ansible/playbooks/upgrade_ios_xe.yml -i ansible/inventory.ini -
 ansible-playbook ansible/playbooks/upgrade_ios_xe.yml -i ansible/inventory.ini -vvv
 ```
 
+## Configuration Backup
+
+### Automatic Backups
+
+**Backups are automatically created before every upgrade!** Configuration files are saved to the `./backups` directory with timestamps.
+
+**Backup files created**:
+
+- `{hostname}_running-config_{timestamp}.cfg` - Running configuration
+- `{hostname}_startup-config_{timestamp}.cfg` - Startup configuration
+- `{hostname}_summary_{timestamp}.txt` - Configuration summary
+
+### Manual Backup Anytime
+
+```bash
+# Backup all switches
+make backup
+
+# Backup specific switch
+make backup LIMIT=switch01
+
+# Or use the playbook directly
+ansible-playbook ansible/playbooks/backup_configs.yml \
+  -i ansible/inventory.ini \
+  --ask-vault-pass
+```
+
+### List and Manage Backups
+
+```bash
+# List recent backups
+make backup-list
+
+# Show restore instructions
+make restore-info
+
+# Find specific backup
+ls -lh backups/*switch01*
+```
+
+### Configuration Options
+
+In `ansible/group_vars/switches.yml`:
+
+```yaml
+# Enable/disable automatic backups (default: true)
+backup_enabled: true
+
+# Backup directory location
+backup_dir: "./backups"
+
+# Also backup to FTP server (optional)
+backup_to_ftp: false
+```
+
+**📖 For complete backup and restore procedures**, see [BACKUP_RESTORE.md](BACKUP_RESTORE.md)
+
 ## Playbook Workflow
 
 The playbook performs the following steps:
 
 1. **Pre-Flight Checks**
+
    - Gathers current IOS-XE version
    - Skips upgrade if already at target version
+
+2. **Configuration Backup** ✨
+
+   - Creates timestamped backup files
+   - Saves running-config to Ansible controller
+   - Saves startup-config
+   - Creates configuration summary
+   - Optional FTP backup
+
+3. **Boot Mode Check**
+
    - Checks boot mode (Bundle vs Install)
-   - Verifies available flash space
+   - If Bundle mode: Clears all old boot variables
 
-2. **Bundle Mode Conversion** (if needed)
-   - Clears all old boot variables
-   - Saves configuration
-   - Conversion happens during install process
+4. **Pre-Installation Preparation** ✨ IMPROVED
 
-3. **Image Transfer**
+   - Saves running-config to startup-config
+   - **Removes inactive packages FIRST** (if install mode) - frees up space
+   - **Verifies flash space AFTER cleanup** (~2GB required)
+   - Fails if insufficient space
+
+5. **Image Transfer**
+
    - Transfers new image via FTP
    - Configurable timeout (default 900s)
+   - Only starts after confirming sufficient space
 
-4. **Installation**
-   - Removes inactive packages (if in install mode)
+6. **Installation and Upgrade**
+
    - Runs `install add file activate commit`
    - Handles prompts automatically
+   - Converts bundle to install mode automatically
    - Switch reboots automatically
 
-5. **Post-Upgrade Verification**
+7. **Post-Upgrade Verification**
+
    - Waits for switch to reload and reconnect
-   - Verifies new version
+   - Verifies new version matches target
    - Confirms install mode is active
    - Reports success/failure
 
@@ -147,21 +224,27 @@ The playbook performs the following steps:
 ### Common Issues
 
 **1. Insufficient Flash Space**
+
 ```
 Error: Insufficient flash space. Available: 1500 MB, Required: 2048 MB
 ```
+
 **Solution**: Free up space manually or reduce `required_space_mb` variable.
 
 **2. FTP Transfer Timeout**
+
 ```
 Error: Connection timeout during FTP transfer
 ```
+
 **Solution**: Increase `ansible_command_timeout` or check FTP server connectivity.
 
 **3. SSH Connection Issues**
+
 ```
 Error: Failed to connect to the host via ssh
 ```
+
 **Solution**: Verify SSH is enabled on switch and credentials are correct.
 
 ### Enable Debug Output
@@ -193,10 +276,12 @@ ansible-playbook ansible/playbooks/upgrade_ios_xe.yml -i ansible/inventory.ini -
 ### Pre-Production Testing
 
 1. **Test in Lab**
+
    - Always test on non-production switches first
    - Verify compatibility with your specific hardware/software combination
 
 2. **Syntax Check**
+
    ```bash
    ansible-playbook ansible/playbooks/upgrade_ios_xe.yml --syntax-check
    ```
@@ -220,6 +305,7 @@ collections:
 ```
 
 Install collections:
+
 ```bash
 ansible-galaxy collection install -r requirements.yml
 ```
@@ -237,9 +323,9 @@ This project is provided as-is for network automation purposes.
 ## Disclaimer
 
 **IMPORTANT**: This playbook will reboot your switches during the upgrade process. Always:
+
 - Test in a non-production environment first
 - Schedule maintenance windows
 - Have console/OOB access available
 - Backup configurations before running
 - Verify network redundancy is in place
-

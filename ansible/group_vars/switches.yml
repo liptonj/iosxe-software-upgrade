@@ -23,6 +23,11 @@ ftp_password: ftppassword
 target_version: "17.15.04"
 image_file: "cat9k_iosxe.17.15.04.SPA.bin"
 
+# Backup Configuration
+backup_enabled: true
+backup_dir: "./backups"
+backup_to_ftp: false  # Set to true to also backup configs to FTP server
+
 # Optional: Override default settings
 # required_space_mb: 2048
 # install_timeout: 1200

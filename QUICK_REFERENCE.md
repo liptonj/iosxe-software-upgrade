@@ -23,10 +23,26 @@ ansible-vault encrypt ansible/group_vars/switches.yml
 
 ## Daily Operations
 
+### Backup Configurations
+
+```bash
+# Backup all switches
+make backup
+
+# Backup single switch
+make backup LIMIT=switch01
+
+# List backups
+make backup-list
+
+# Show restore instructions
+make restore-info
+```
+
 ### Run Upgrade
 
 ```bash
-# Standard execution
+# Standard execution (includes automatic backup)
 ansible-playbook ansible/playbooks/upgrade_ios_xe.yml \
   -i ansible/inventory.ini \
   --ask-vault-pass
@@ -96,6 +112,11 @@ ftp_password: <encrypted>
 # Target Version
 target_version: "17.15.04"
 image_file: "cat9k_iosxe.17.15.04.SPA.bin"
+
+# Backup Configuration
+backup_enabled: true
+backup_dir: "./backups"
+backup_to_ftp: false
 ```
 
 ### Optional Variables (Override in playbook)
@@ -119,15 +140,16 @@ reboot_wait_timeout: 300         # Wait time after reboot (seconds)
 ## Playbook Workflow
 
 ```
-1. Gather version     → Skip if already at target
-2. Check boot mode    → Clear boot vars if bundle mode
-3. Check flash space  → Fail if insufficient
-4. Save config        → Backup running-config
-5. Clean old packages → Free up space (install mode only)
-6. Transfer image     → FTP transfer (~10-15 min)
-7. Install & activate → Switch reboots (~15-20 min)
-8. Wait & reconnect   → Wait for boot (~5-10 min)
-9. Verify version     → Confirm success
+1. Gather version       → Skip if already at target
+2. BACKUP CONFIG        → Save to ./backups with timestamp ✨
+3. Check boot mode      → Clear boot vars if bundle mode
+4. Save to startup      → Backup running-config to NVRAM
+5. CLEAN OLD PACKAGES   → Remove inactive (frees space) ✨ FIRST
+6. VERIFY FLASH SPACE   → Check AFTER cleanup (~2GB required) ✨
+7. Transfer image       → FTP transfer (~10-15 min)
+8. Install & activate   → Switch reboots (~15-20 min)
+9. Wait & reconnect     → Wait for boot (~5-10 min)
+10. Verify version      → Confirm success
 ```
 
 ## Safety Checklist

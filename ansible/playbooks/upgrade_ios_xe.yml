@@ -8,6 +8,9 @@
     required_space_mb: 2048
     install_timeout: 1200
     reboot_wait_timeout: 300
+    backup_enabled: true
+    backup_dir: "./backups"
+    backup_to_ftp: false  # Set to true to also backup to FTP server
 
   tasks:
     - name: Gather facts from switch
@@ -28,6 +31,90 @@
       ansible.builtin.meta: end_host
       when: target_version in facts_output.ansible_facts.ansible_net_version
 
+    # ========================================
+    # Configuration Backup Section
+    # ========================================
+    - name: Create backup timestamp
+      ansible.builtin.set_fact:
+        backup_timestamp: "{{ ansible_date_time.iso8601_basic_short }}"
+      when: backup_enabled | bool
+
+    - name: Create local backup directory
+      ansible.builtin.file:
+        path: "{{ backup_dir }}"
+        state: directory
+        mode: '0755'
+      delegate_to: localhost
+      run_once: false
+      when: backup_enabled | bool
+
+    - name: Backup running configuration to Ansible controller
+      cisco.ios.ios_config:
+        backup: true
+        backup_options:
+          filename: "{{ inventory_hostname }}_running-config_{{ backup_timestamp }}.cfg"
+          dir_path: "{{ backup_dir }}"
+      register: backup_result
+      when: backup_enabled | bool
+
+    - name: Display backup location
+      ansible.builtin.debug:
+        msg: "Configuration backed up to: {{ backup_result.backup_path | default('N/A') }}"
+      when: backup_enabled | bool and backup_result.backup_path is defined
+
+    - name: Backup configuration to FTP server (optional)
+      cisco.ios.ios_command:
+        commands:
+          - command: "copy running-config ftp://{{ ftp_username }}:{{ ftp_password }}@{{ ftp_host }}/backups/{{ inventory_hostname }}_running-config_{{ backup_timestamp }}.cfg"
+            prompt:
+              - 'Address or name of remote host'
+              - 'Destination filename'
+            answer:
+              - "{{ ftp_host }}"
+              - "backups/{{ inventory_hostname }}_running-config_{{ backup_timestamp }}.cfg"
+      when: backup_enabled | bool and backup_to_ftp | bool
+      ignore_errors: true
+      register: ftp_backup_result
+
+    - name: Display FTP backup result
+      ansible.builtin.debug:
+        msg: "{{ 'FTP backup successful' if ftp_backup_result is succeeded else 'FTP backup skipped or failed (continuing)' }}"
+      when: backup_enabled | bool and backup_to_ftp | bool
+
+    - name: Get current configuration summary
+      cisco.ios.ios_command:
+        commands:
+          - show running-config | include hostname|interface|ip route|vlan|boot
+      register: config_summary
+      when: backup_enabled | bool
+
+    - name: Save configuration summary
+      ansible.builtin.copy:
+        content: |
+          Backup Date: {{ ansible_date_time.iso8601 }}
+          Hostname: {{ inventory_hostname }}
+          Switch Model: {{ facts_output.ansible_facts.ansible_net_model }}
+          Current Version: {{ facts_output.ansible_facts.ansible_net_version }}
+          Serial Number: {{ facts_output.ansible_facts.ansible_net_serialnum }}
+          
+          Configuration Summary:
+          {{ config_summary.stdout[0] }}
+        dest: "{{ backup_dir }}/{{ inventory_hostname }}_summary_{{ backup_timestamp }}.txt"
+      delegate_to: localhost
+      when: backup_enabled | bool
+
+    - name: Backup confirmation
+      ansible.builtin.debug:
+        msg: |
+          ✓ Configuration backup completed
+          - Local backup: {{ backup_dir }}/{{ inventory_hostname }}_running-config_{{ backup_timestamp }}.cfg
+          - Summary file: {{ backup_dir }}/{{ inventory_hostname }}_summary_{{ backup_timestamp }}.txt
+          {{ '- FTP backup: Attempted' if backup_to_ftp | bool else '- FTP backup: Disabled' }}
+      when: backup_enabled | bool
+
+    # ========================================
+    # Pre-Flight Checks
+    # ========================================
     - name: Check boot mode (INSTALL vs BUNDLE)
       cisco.ios.ios_command:
         commands:
@@ -67,7 +154,44 @@
 
       when: is_bundle_mode | bool
 
-    - name: Check available flash space
+    # ========================================
+    # Pre-Installation Preparation
+    # ========================================
+    - name: Save running configuration to startup configuration
+      cisco.ios.ios_command:
+        commands:
+          - command: copy running-config startup-config
+            prompt: 'Destination filename \[startup-config\]\?'
+            answer: "\r"
+      register: save_config_output
+
+    - name: Display save config result
+      ansible.builtin.debug:
+        msg: "Configuration saved to startup-config"
+
+    - name: Remove inactive packages to free up space (install mode only)
+      cisco.ios.ios_command:
+        commands:
+          - command: install remove inactive
+            prompt:
+              - 'Do you want to remove the above files\? \[y/n\]'
+            answer:
+              - 'y'
+      register: install_remove_output
+      vars:
+        ansible_command_timeout: 600
+      when: not (is_bundle_mode | bool)
+      ignore_errors: true
+
+    - name: Display cleanup result
+      ansible.builtin.debug:
+        msg: "{{ 'No old files found to clean.' if 'No extra package' in (install_remove_output.stdout[0] | default('')) else 'Old files removed - flash space freed.' }}"
+      when: not (is_bundle_mode | bool) and install_remove_output is defined
+
+    # ========================================
+    # Flash Space Verification (After Cleanup)
+    # ========================================
+    - name: Check available flash space after cleanup
       cisco.ios.ios_command:
         commands:
           - dir flash: | include bytes free
@@ -87,40 +211,12 @@
 
     - name: Fail if insufficient flash space
       ansible.builtin.fail:
-        msg: "Insufficient flash space. Available: {{ flash_free_mb }} MB, Required: {{ required_space_mb }} MB"
+        msg: "Insufficient flash space. Available: {{ flash_free_mb }} MB, Required: {{ required_space_mb }} MB. Free up more space or reduce required_space_mb variable."
       when: flash_free_mb | int < required_space_mb | int
 
-    - name: Save running configuration to startup configuration
-      cisco.ios.ios_command:
-        commands:
-          - command: copy running-config startup-config
-            prompt: 'Destination filename \[startup-config\]\?'
-            answer: "\r"
-      register: save_config_output
-
-    - name: Display save config result
-      ansible.builtin.debug:
-        msg: "Configuration saved successfully"
-
-    - name: Remove inactive packages if in install mode (optional cleanup)
-      cisco.ios.ios_command:
-        commands:
-          - command: install remove inactive
-            prompt:
-              - 'Do you want to remove the above files\? \[y/n\]'
-            answer:
-              - 'y'
-      register: install_remove_output
-      vars:
-        ansible_command_timeout: 600
-      when: not (is_bundle_mode | bool)
-      ignore_errors: true
-
-    - name: Display cleanup result
-      ansible.builtin.debug:
-        msg: "{{ 'No old files found to clean.' if 'No extra package' in (install_remove_output.stdout[0] | default('')) else 'Old files removed successfully.' }}"
-      when: not (is_bundle_mode | bool) and install_remove_output is defined
-
+    # ========================================
+    # Image Transfer
+    # ========================================
     - name: Transfer IOS-XE image via FTP
       cisco.ios.ios_command:
         commands:
@@ -135,8 +231,11 @@
 
     - name: Display FTP transfer result
       ansible.builtin.debug:
-        msg: "Image transfer completed"
+        msg: "Image transfer completed successfully"
 
+    # ========================================
+    # Installation and Upgrade
+    # ========================================
     - name: Install and activate new IOS-XE image
       cisco.ios.ios_command:
         commands:
@@ -162,6 +261,9 @@
         delay: 60
         timeout: 600
 
+    # ========================================
+    # Post-Upgrade Verification
+    # ========================================
     - name: Gather facts after upgrade
       cisco.ios.ios_facts:
         gather_subset: hardware

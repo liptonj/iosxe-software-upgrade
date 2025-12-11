@@ -42,4 +42,6 @@ Thumbs.db
 # Backup files
 *.bak
 *.backup
-
+backups/
+*.cfg
+*2.16*

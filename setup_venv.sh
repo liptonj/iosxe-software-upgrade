@@ -8,14 +8,43 @@ echo "IOS-XE Upgrade Environment Setup"
 echo "==================================="
 echo ""
 
-# Check if Python 3 is installed
-if ! command -v python3 &> /dev/null; then
-    echo "❌ Python 3 is not installed. Please install Python 3.8 or later."
-    exit 1
+# Find Python 3.10 or newer (required for ansible 9.x+)
+PYTHON_CMD=""
+
+# Try to find Python 3.10+ in order of preference
+for py_version in python3.13 python3.12 python3.11 python3.10; do
+    if command -v $py_version &> /dev/null; then
+        PYTHON_CMD=$py_version
+        break
+    fi
+done
+
+# Fallback to python3 and check version
+if [ -z "$PYTHON_CMD" ]; then
+    if command -v python3 &> /dev/null; then
+        PYTHON_CMD=python3
+        PY_VERSION=$(python3 -c 'import sys; print(f"{sys.version_info.major}.{sys.version_info.minor}")')
+        PY_MAJOR=$(echo $PY_VERSION | cut -d'.' -f1)
+        PY_MINOR=$(echo $PY_VERSION | cut -d'.' -f2)
+        
+        if [ "$PY_MAJOR" -lt 3 ] || ([ "$PY_MAJOR" -eq 3 ] && [ "$PY_MINOR" -lt 10 ]); then
+            echo "❌ Python 3.10+ required for ansible 9.x (ansible-core 2.16+)"
+            echo "   Found: Python $PY_VERSION"
+            echo ""
+            echo "Please install Python 3.10 or newer:"
+            echo "  - macOS: brew install python@3.10"
+            echo "  - Ubuntu/Debian: sudo apt install python3.10"
+            echo "  - RHEL/CentOS: sudo dnf install python3.10"
+            exit 1
+        fi
+    else
+        echo "❌ Python 3 is not installed. Please install Python 3.10 or later."
+        exit 1
+    fi
 fi
 
-PYTHON_VERSION=$(python3 --version | cut -d' ' -f2)
-echo "✓ Found Python $PYTHON_VERSION"
+PYTHON_VERSION=$($PYTHON_CMD --version | cut -d' ' -f2)
+echo "✓ Found Python $PYTHON_VERSION using $PYTHON_CMD"
 
 # Create virtual environment
 if [ -d ".venv" ]; then
@@ -31,8 +60,8 @@ if [ -d ".venv" ]; then
 fi
 
 if [ ! -d ".venv" ]; then
-    echo "Creating virtual environment..."
-    python3 -m venv .venv
+    echo "Creating virtual environment with $PYTHON_CMD..."
+    $PYTHON_CMD -m venv .venv
     echo "✓ Virtual environment created"
 fi
 
@@ -44,11 +73,14 @@ source .venv/bin/activate
 echo "Upgrading pip..."
 pip install --upgrade pip setuptools wheel
 
-# Install Ansible and dependencies
+# Install Python requirements from requirements.txt
 echo ""
-echo "Installing Ansible and dependencies..."
-pip install ansible>=2.16.0
-pip install ansible-lint yamllint
+echo "Installing Python requirements from requirements.txt..."
+if [ ! -f "requirements.txt" ]; then
+    echo "❌ ERROR: requirements.txt not found!"
+    exit 1
+fi
+pip install -r requirements.txt
 
 # Install Ansible collections
 echo ""
@@ -60,33 +92,6 @@ else
     ansible-galaxy collection install cisco.ios
     ansible-galaxy collection install ansible.netcommon
 fi
-
-# Create requirements.txt if it doesn't exist
-if [ ! -f "requirements.txt" ]; then
-    echo "Creating requirements.txt..."
-    cat > requirements.txt << 'EOF'
-# Core Dependencies
-ansible>=2.16.0
-
-# Linting and Testing
-ansible-lint>=6.0.0
-yamllint>=1.26.0
-pylint>=2.15.0
-
-# Testing (optional)
-pytest>=7.0.0
-pytest-cov>=4.0.0
-
-# Formatting (optional)
-black>=22.0.0
-EOF
-    echo "✓ requirements.txt created"
-fi
-
-# Install Python requirements
-echo ""
-echo "Installing Python requirements..."
-pip install -r requirements.txt
 
 echo ""
 echo "==================================="
