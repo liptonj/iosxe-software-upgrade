@@ -6,81 +6,18 @@
     required_space_mb: 2048
 
   tasks:
-    - name: Get flash directory listing
-      cisco.ios.ios_command:
-        commands:
-          - dir flash:
-      register: flash_dir
+    # Get flash directory listing
+    - name: Get flash directory
+      ansible.builtin.include_tasks: tasks/flash/get_flash_directory.yml
 
-    - name: Display flash contents
-      ansible.builtin.debug:
-        msg: "{{ flash_dir.stdout_lines[0] }}"
-
-    - name: Extract flash statistics
-      cisco.ios.ios_command:
-        commands:
-          - dir flash: | include bytes
-      register: flash_stats
-
-    - name: Display flash statistics
-      ansible.builtin.debug:
-        msg: "{{ flash_stats.stdout[0] }}"
-
-    - name: Parse flash space
-      ansible.builtin.set_fact:
-        flash_free_bytes: "{{ flash_stats.stdout[0] | regex_search('(\\d+) bytes free', '\\1') | first }}"
-        flash_total_bytes: "{{ flash_stats.stdout[0] | regex_search('(\\d+) bytes total', '\\1') | first }}"
-
+    # Calculate flash usage statistics
     - name: Calculate flash usage
-      ansible.builtin.set_fact:
-        flash_free_mb: "{{ (flash_free_bytes | int / 1024 / 1024) | int }}"
-        flash_total_mb: "{{ (flash_total_bytes | int / 1024 / 1024) | int }}"
-        flash_used_mb: "{{ ((flash_total_bytes | int - flash_free_bytes | int) / 1024 / 1024) | int }}"
-        flash_used_percent: "{{ (((flash_total_bytes | int - flash_free_bytes | int) / flash_total_bytes | int) * 100) | int }}"
+      ansible.builtin.include_tasks: tasks/flash/calculate_flash_usage.yml
 
-    - name: Display flash summary
-      ansible.builtin.debug:
-        msg: |
-          ===========================================
-          Flash Storage Summary
-          ===========================================
-          Total Space: {{ flash_total_mb }} MB
-          Used Space:  {{ flash_used_mb }} MB ({{ flash_used_percent }}%)
-          Free Space:  {{ flash_free_mb }} MB
-          Required:    {{ required_space_mb }} MB
-          Status:      {{ 'SUFFICIENT' if flash_free_mb | int >= required_space_mb | int else 'INSUFFICIENT' }}
-          ===========================================
+    # List old IOS images
+    - name: List old images
+      ansible.builtin.include_tasks: tasks/flash/list_old_images.yml
 
-    - name: Check for old IOS images
-      cisco.ios.ios_command:
-        commands:
-          - dir flash: | include .bin
-      register: ios_images
-      ignore_errors: true
-
-    - name: Display IOS images found
-      ansible.builtin.debug:
-        msg: "{{ ios_images.stdout_lines[0] }}"
-      when: ios_images.stdout | length > 0
-
-    - name: Check if sufficient space
-      ansible.builtin.assert:
-        that:
-          - flash_free_mb | int >= required_space_mb | int
-        success_msg: "✓ Sufficient flash space available ({{ flash_free_mb }} MB >= {{ required_space_mb }} MB)"
-        fail_msg: "✗ Insufficient flash space ({{ flash_free_mb }} MB < {{ required_space_mb }} MB). Free up space before upgrade."
-      ignore_errors: true
-
-    - name: Recommendations
-      ansible.builtin.debug:
-        msg: |
-          Recommendations:
-          {% if flash_free_mb | int < required_space_mb | int %}
-          - Free up {{ required_space_mb | int - flash_free_mb | int }} MB before upgrade
-          - Consider removing old IOS images or unused files
-          - Run 'install remove inactive' to clean up old packages
-          {% else %}
-          - Flash space is sufficient for upgrade
-          - Proceed with confidence
-          {% endif %}
-
+    # Provide recommendations
+    - name: Provide recommendations
+      ansible.builtin.include_tasks: tasks/flash/provide_recommendations.yml

@@ -1,0 +1,10 @@
+---
+# Check if switch is already at target version and skip if yes
+- name: Check if already at target version
+  ansible.builtin.debug:
+    msg: "Switch is already running target version {{ selected_target_version }}. Skipping upgrade."
+  when: selected_target_version in facts_output.ansible_facts.ansible_net_version
+
+- name: End play if already at target version
+  ansible.builtin.meta: end_host
+  when: selected_target_version in facts_output.ansible_facts.ansible_net_version

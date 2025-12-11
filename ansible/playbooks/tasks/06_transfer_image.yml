@@ -1,0 +1,29 @@
+---
+# Transfer IOS-XE image via FTP
+- name: Transfer IOS-XE image via FTP
+  cisco.ios.ios_command:
+    commands:
+      - command: "copy ftp://{{ ftp_username }}:{{ ftp_password }}@{{ ftp_host }}/{{ selected_image_file }} flash:{{ selected_image_file }}"
+        prompt:
+          - 'Destination filename \[{{ selected_image_file }}\]\?'
+        answer:
+          - "\r"
+  vars:
+    ansible_command_timeout: 900
+  register: ftp_transfer_output
+  when: not (dry_run | bool)
+
+- name: Dry-run message - FTP transfer skipped
+  ansible.builtin.debug:
+    msg: |
+      [DRY-RUN] Would transfer image via FTP:
+      - Model: {{ facts_output.ansible_facts.ansible_net_model }}
+      - Source: ftp://{{ ftp_host }}/{{ selected_image_file }}
+      - Destination: flash:{{ selected_image_file }}
+      - Estimated time: 10-15 minutes
+  when: dry_run | bool
+
+- name: Display FTP transfer result
+  ansible.builtin.debug:
+    msg: "{{ '[DRY-RUN] Would transfer' if dry_run | bool else 'Image transfer completed successfully' }}"
+

@@ -1,0 +1,14 @@
+---
+# Detailed flash space check with recommendations (uses atomic tasks)
+- name: Get flash directory
+  ansible.builtin.include_tasks: flash/get_flash_directory.yml
+
+- name: Calculate flash usage
+  ansible.builtin.include_tasks: flash/calculate_flash_usage.yml
+
+- name: List old images
+  ansible.builtin.include_tasks: flash/list_old_images.yml
+
+- name: Provide recommendations
+  ansible.builtin.include_tasks: flash/provide_recommendations.yml
+

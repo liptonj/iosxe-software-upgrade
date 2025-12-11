@@ -1,0 +1,18 @@
+---
+# Initialize variables and detect switch model (uses atomic tasks)
+- name: Set backup directory to project root
+  ansible.builtin.set_fact:
+    backup_dir: "{{ playbook_dir }}/../../{{ backup_dir_name }}"
+  when: backup_enabled | bool
+
+- name: Gather switch facts
+  ansible.builtin.include_tasks: common/gather_switch_facts.yml
+
+- name: Detect model
+  ansible.builtin.include_tasks: common/detect_model.yml
+
+- name: Select version and image
+  ansible.builtin.include_tasks: common/select_version_and_image.yml
+
+- name: Check if version skip needed
+  ansible.builtin.include_tasks: common/check_version_skip.yml

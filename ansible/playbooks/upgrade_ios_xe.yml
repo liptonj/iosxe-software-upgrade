@@ -2,294 +2,97 @@
 - name: Cisco IOS-XE 9300 Upgrade Playbook
   hosts: switches
   gather_facts: false
+  serial: "{{ serial_mode | default('100%') }}" # Override: -e "serial_mode=1" for one at a time
+  max_fail_percentage: "{{ max_fail_pct | default(100) }}" # Override: -e "max_fail_pct=0" to abort on any failure
+  any_errors_fatal: "{{ fail_fast | default(false) | bool }}" # Override: -e "fail_fast=true"
+
   vars:
+    # Default target version - can be overridden per model or per host
     target_version: "17.15.04"
+    # Default image file - can be overridden per model or per host
     image_file: "cat9k_iosxe.17.15.04.SPA.bin"
+
+    # Model-specific version mapping (optional)
+    target_versions_by_model:
+      C9200: "17.15.04"
+      C9200CX: "17.15.04"
+      C9200L: "17.15.04"
+      C9300: "17.15.04"
+      C9300X: "17.15.04"
+      C9350: "17.15.04"
+      C9400: "17.15.04"
+      C9500: "17.15.04"
+      C9500X: "17.15.04"
+
+    # Model-specific image mapping (optional)
+    image_files_by_model:
+      C9200: "cat9k_iosxe.17.15.04.SPA.bin"
+      C9200CX: "cat9k_iosxe.17.15.04.SPA.bin"
+      C9200L: "cat9k_iosxe.17.15.04.SPA.bin"
+      C9300: "cat9k_iosxe.17.15.04.SPA.bin"
+      C9300X: "cat9k_iosxe.17.15.04.SPA.bin"
+      C9350: "cat9k_iosxe.17.15.04.SPA.bin"
+      C9400: "cat9k_iosxe.17.15.04.SPA.bin"
+      C9500: "cat9k_iosxe.17.15.04.SPA.bin"
+      C9500X: "cat9k_iosxe.17.15.04.SPA.bin"
+
+    # Upgrade settings
     required_space_mb: 2048
     install_timeout: 1200
     reboot_wait_timeout: 300
+
+    # Backup settings
     backup_enabled: true
     backup_dir_name: "backups"
-    backup_to_ftp: false  # Set to true to also backup to FTP server
+    backup_to_ftp: false
+
+    # Execution mode
+    dry_run: false
 
   tasks:
-    - name: Set backup directory to project root
-      ansible.builtin.set_fact:
-        backup_dir: "{{ playbook_dir }}/../../{{ backup_dir_name }}"
-      when: backup_enabled | bool
-    - name: Gather facts from switch
-      cisco.ios.ios_facts:
-        gather_subset: hardware
-      register: facts_output
+    # ========================================
+    # Phase 1: Initialization
+    # ========================================
+    - name: Display execution mode
+      ansible.builtin.include_tasks: tasks/01_display_execution_mode.yml
 
-    - name: Display current version
-      ansible.builtin.debug:
-        msg: "Current IOS-XE version is {{ facts_output.ansible_facts.ansible_net_version }}"
+    - name: Test connectivity (pre-flight)
+      ansible.builtin.include_tasks: tasks/test_connectivity.yml
+      tags: ["connectivity_test"]
 
-    - name: Check if already at target version
-      ansible.builtin.debug:
-        msg: "Switch is already running target version {{ target_version }}. Skipping upgrade."
-      when: target_version in facts_output.ansible_facts.ansible_net_version
-
-    - name: End play if already at target version
-      ansible.builtin.meta: end_host
-      when: target_version in facts_output.ansible_facts.ansible_net_version
+    - name: Initialize and detect model
+      ansible.builtin.include_tasks: tasks/02_initialize_and_detect_model.yml
 
     # ========================================
-    # Configuration Backup Section
+    # Phase 2: Backup
     # ========================================
-    - name: Create backup timestamp
-      ansible.builtin.set_fact:
-        backup_timestamp: "{{ lookup('pipe', 'date +%Y%m%dT%H%M%S') }}"
-      when: backup_enabled | bool
-
-    - name: Create local backup directory
-      ansible.builtin.file:
-        path: "{{ backup_dir }}"
-        state: directory
-        mode: '0755'
-      delegate_to: localhost
-      run_once: false
-      when: backup_enabled | bool
-
-    - name: Backup running configuration to Ansible controller
-      cisco.ios.ios_config:
-        backup: true
-        backup_options:
-          filename: "{{ inventory_hostname }}_running-config_{{ backup_timestamp }}.cfg"
-          dir_path: "{{ backup_dir }}"
-      register: backup_result
-      when: backup_enabled | bool
-
-    - name: Display backup location
-      ansible.builtin.debug:
-        msg: "Configuration backed up to: {{ backup_result.backup_path | default('N/A') }}"
-      when: backup_enabled | bool and backup_result.backup_path is defined
-
-    - name: Backup configuration to FTP server (optional)
-      cisco.ios.ios_command:
-        commands:
-          - "copy running-config ftp://{{ ftp_username }}:{{ ftp_password }}@{{ ftp_host }}/backups/{{ inventory_hostname }}_running-config_{{ backup_timestamp }}.cfg"
-      when: backup_enabled | bool and backup_to_ftp | bool
-      ignore_errors: true
-      register: ftp_backup_result
-      vars:
-        ansible_command_timeout: 300
-
-    - name: Display FTP backup result
-      ansible.builtin.debug:
-        msg: "{{ 'FTP backup successful' if ftp_backup_result is succeeded else 'FTP backup skipped or failed (continuing)' }}"
-      when: backup_enabled | bool and backup_to_ftp | bool
-
-    - name: Get current configuration summary
-      cisco.ios.ios_command:
-        commands:
-          - show running-config | include hostname|interface|ip route|vlan|boot
-      register: config_summary
-      when: backup_enabled | bool
-
-    - name: Save configuration summary
-      ansible.builtin.copy:
-        content: |
-          Backup Date: {{ lookup('pipe', 'date -u +%Y-%m-%dT%H:%M:%SZ') }}
-          Hostname: {{ inventory_hostname }}
-          Switch Model: {{ facts_output.ansible_facts.ansible_net_model }}
-          Current Version: {{ facts_output.ansible_facts.ansible_net_version }}
-          Serial Number: {{ facts_output.ansible_facts.ansible_net_serialnum }}
-          
-          Configuration Summary:
-          {{ config_summary.stdout[0] }}
-        dest: "{{ backup_dir }}/{{ inventory_hostname }}_summary_{{ backup_timestamp }}.txt"
-      delegate_to: localhost
-      when: backup_enabled | bool
-
-    - name: Backup confirmation
-      ansible.builtin.debug:
-        msg: |
-          ✓ Configuration backup completed
-          - Local backup: {{ backup_dir }}/{{ inventory_hostname }}_running-config_{{ backup_timestamp }}.cfg
-          - Summary file: {{ backup_dir }}/{{ inventory_hostname }}_summary_{{ backup_timestamp }}.txt
-          {{ '- FTP backup: Attempted' if backup_to_ftp | bool else '- FTP backup: Disabled' }}
-      when: backup_enabled | bool
+    - name: Backup configuration
+      ansible.builtin.include_tasks: tasks/03_backup_configuration.yml
 
     # ========================================
-    # Pre-Flight Checks
+    # Phase 3: Pre-Flight Checks
     # ========================================
-    - name: Check boot mode (INSTALL vs BUNDLE)
-      cisco.ios.ios_command:
-        commands:
-          - show version | include INSTALL|BUNDLE
-      register: boot_mode_check
+    - name: Check boot mode
+      ansible.builtin.include_tasks: tasks/04_check_boot_mode.yml
 
-    - name: Display boot mode
-      ansible.builtin.debug:
-        msg: "Boot mode output: {{ boot_mode_check.stdout[0] }}"
+    - name: Prepare for upgrade
+      ansible.builtin.include_tasks: tasks/05_prepare_for_upgrade.yml
 
-    - name: Determine if in bundle mode
-      ansible.builtin.set_fact:
-        is_bundle_mode: "{{ 'BUNDLE' in boot_mode_check.stdout[0] }}"
-
-    - name: Clear old boot variables if in bundle mode
-      block:
-        - name: Get current boot system configuration
-          cisco.ios.ios_command:
-            commands:
-              - show running-config | include boot system
-          register: boot_config
-
-        - name: Display current boot configuration
-          ansible.builtin.debug:
-            msg: "Current boot configuration: {{ boot_config.stdout[0] }}"
-
-        - name: Clear all boot system variables
-          cisco.ios.ios_config:
-            lines:
-              - no boot system
-            save_when: modified
-          when: boot_config.stdout[0] | length > 0
-
-        - name: Confirm boot variables cleared
-          ansible.builtin.debug:
-            msg: "Old boot variables cleared. Install mode conversion will happen during install process."
-
-      when: is_bundle_mode | bool
+    - name: Detailed flash space check
+      ansible.builtin.include_tasks: tasks/check_flash_space_detailed.yml
+      tags: ["detailed_flash_check"]
 
     # ========================================
-    # Pre-Installation Preparation
+    # Phase 4: Upgrade Execution
     # ========================================
-    - name: Save running configuration to startup configuration
-      cisco.ios.ios_command:
-        commands:
-          - command: copy running-config startup-config
-            prompt: 'Destination filename \[startup-config\]\?'
-            answer: "\r"
-      register: save_config_output
+    - name: Transfer image
+      ansible.builtin.include_tasks: tasks/06_transfer_image.yml
 
-    - name: Display save config result
-      ansible.builtin.debug:
-        msg: "Configuration saved to startup-config"
-
-    - name: Remove inactive packages to free up space (install mode only)
-      cisco.ios.ios_command:
-        commands:
-          - command: install remove inactive
-            prompt:
-              - 'Do you want to remove the above files\? \[y/n\]'
-            answer:
-              - 'y'
-      register: install_remove_output
-      vars:
-        ansible_command_timeout: 600
-      when: not (is_bundle_mode | bool)
-      ignore_errors: true
-
-    - name: Display cleanup result
-      ansible.builtin.debug:
-        msg: "{{ 'No old files found to clean.' if 'No extra package' in (install_remove_output.stdout[0] | default('')) else 'Old files removed - flash space freed.' }}"
-      when: not (is_bundle_mode | bool) and install_remove_output is defined
+    - name: Install and reboot
+      ansible.builtin.include_tasks: tasks/07_install_and_reboot.yml
 
     # ========================================
-    # Flash Space Verification (After Cleanup)
+    # Phase 5: Verification
     # ========================================
-    - name: Check available flash space after cleanup
-      cisco.ios.ios_command:
-        commands:
-          - dir flash: | include bytes free
-      register: flash_space_output
-
-    - name: Parse flash space
-      ansible.builtin.set_fact:
-        flash_free_bytes: "{{ flash_space_output.stdout[0] | regex_search('(\\d+) bytes free', '\\1') | first }}"
-
-    - name: Convert to MB
-      ansible.builtin.set_fact:
-        flash_free_mb: "{{ (flash_free_bytes | int / 1024 / 1024) | int }}"
-
-    - name: Display available flash space
-      ansible.builtin.debug:
-        msg: "Available flash space: {{ flash_free_mb }} MB (Required: {{ required_space_mb }} MB)"
-
-    - name: Fail if insufficient flash space
-      ansible.builtin.fail:
-        msg: "Insufficient flash space. Available: {{ flash_free_mb }} MB, Required: {{ required_space_mb }} MB. Free up more space or reduce required_space_mb variable."
-      when: flash_free_mb | int < required_space_mb | int
-
-    # ========================================
-    # Image Transfer
-    # ========================================
-    - name: Transfer IOS-XE image via FTP
-      cisco.ios.ios_command:
-        commands:
-          - command: "copy ftp://{{ ftp_username }}:{{ ftp_password }}@{{ ftp_host }}/{{ image_file }} flash:{{ image_file }}"
-            prompt:
-              - 'Destination filename \[{{ image_file }}\]\?'
-            answer:
-              - "\r"
-      vars:
-        ansible_command_timeout: 900
-      register: ftp_transfer_output
-
-    - name: Display FTP transfer result
-      ansible.builtin.debug:
-        msg: "Image transfer completed successfully"
-
-    # ========================================
-    # Installation and Upgrade
-    # ========================================
-    - name: Install and activate new IOS-XE image
-      cisco.ios.ios_command:
-        commands:
-          - command: "install add file flash:{{ image_file }} activate commit"
-            prompt:
-              - 'This operation may require a reload of the system. Do you want to proceed\? \[y/n\]'
-            answer:
-              - 'y'
-      register: install_activate_output
-      vars:
-        ansible_command_timeout: "{{ install_timeout }}"
-
-    - name: Display install output
-      ansible.builtin.debug:
-        var: install_activate_output.stdout_lines
-
-    - name: Wait for switch to reload
-      ansible.builtin.pause:
-        seconds: "{{ reboot_wait_timeout }}"
-
-    - name: Wait for switch to become reachable
-      ansible.builtin.wait_for_connection:
-        delay: 60
-        timeout: 600
-
-    # ========================================
-    # Post-Upgrade Verification
-    # ========================================
-    - name: Gather facts after upgrade
-      cisco.ios.ios_facts:
-        gather_subset: hardware
-      register: post_upgrade_facts
-
-    - name: Verify new version
-      ansible.builtin.debug:
-        msg: "Upgrade successful! New version is {{ post_upgrade_facts.ansible_facts.ansible_net_version }}"
-      when: target_version in post_upgrade_facts.ansible_facts.ansible_net_version
-
-    - name: Verify boot mode is now INSTALL
-      cisco.ios.ios_command:
-        commands:
-          - show version | include INSTALL
-      register: post_boot_mode
-
-    - name: Display post-upgrade boot mode
-      ansible.builtin.debug:
-        msg: "Post-upgrade boot mode: {{ post_boot_mode.stdout[0] }}"
-
-    - name: Fail if version verification fails
-      ansible.builtin.fail:
-        msg: "Upgrade verification failed. Expected {{ target_version }}, but got {{ post_upgrade_facts.ansible_facts.ansible_net_version }}"
-      when: target_version not in post_upgrade_facts.ansible_facts.ansible_net_version
-
-    - name: Final success message
-      ansible.builtin.debug:
-        msg: "IOS-XE upgrade to {{ target_version }} completed successfully. Switch is now in INSTALL mode."
-
+    - name: Post-upgrade verification
+      ansible.builtin.include_tasks: tasks/08_post_verification.yml

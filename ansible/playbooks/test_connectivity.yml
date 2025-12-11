@@ -4,28 +4,11 @@
   gather_facts: false
 
   tasks:
-    - name: Test SSH connection and gather minimal facts
-      cisco.ios.ios_facts:
-        gather_subset: min
-      register: facts_result
+    # Use atomic task to test SSH connection
+    - name: Test SSH connection
+      ansible.builtin.include_tasks: tasks/test/test_ssh_connection.yml
 
-    - name: Display connection success
-      ansible.builtin.debug:
-        msg: "Successfully connected to {{ facts_result.ansible_facts.ansible_net_hostname }} ({{ inventory_hostname }})"
-
-    - name: Display IOS version
-      ansible.builtin.debug:
-        msg: "IOS Version: {{ facts_result.ansible_facts.ansible_net_version }}"
-
-    - name: Display model
-      ansible.builtin.debug:
-        msg: "Model: {{ facts_result.ansible_facts.ansible_net_model }}"
-
-    - name: Display serial number
-      ansible.builtin.debug:
-        msg: "Serial: {{ facts_result.ansible_facts.ansible_net_serialnum }}"
-
-    - name: Connectivity test summary
-      ansible.builtin.debug:
-        msg: "✓ Connectivity test passed for {{ facts_result.ansible_facts.ansible_net_hostname }}"
+    # Use atomic task to display details
+    - name: Display switch details
+      ansible.builtin.include_tasks: tasks/test/display_switch_details.yml
 

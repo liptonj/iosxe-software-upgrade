@@ -67,6 +67,7 @@ switch ($Command.ToLower()) {
     Write-Host ""
     Write-Host "Upgrade Operations:" -ForegroundColor Yellow
     Write-Host "  .\run.ps1 upgrade           - Run upgrade playbook"
+    Write-Host "  .\run.ps1 upgrade-dry-run   - Test upgrade workflow WITHOUT making changes"
     Write-Host ""
     Write-Host "Maintenance:" -ForegroundColor Yellow
     Write-Host "  .\run.ps1 lint              - Run ansible-lint on playbook"
@@ -174,6 +175,19 @@ switch ($Command.ToLower()) {
     ansible-playbook $PLAYBOOK `
       -i $INVENTORY `
       $limitArg `
+      $VAULT_PASS `
+      -vv
+  }
+    
+  "upgrade-dry-run" {
+    Write-Header "Running IOS-XE upgrade playbook in DRY-RUN mode..."
+    Write-Host "Target: $Limit" -ForegroundColor Cyan
+    Write-Host "🔍 DRY-RUN: No changes will be made to switches" -ForegroundColor Yellow
+    $limitArg = if ($Limit -ne "all") { "--limit $Limit" } else { "" }
+    ansible-playbook $PLAYBOOK `
+      -i $INVENTORY `
+      $limitArg `
+      -e "dry_run=true" `
       $VAULT_PASS `
       -vv
   }

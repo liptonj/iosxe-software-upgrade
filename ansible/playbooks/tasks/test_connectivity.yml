@@ -1,0 +1,7 @@
+---
+# Test SSH connectivity to switch (uses atomic tasks)
+- name: Test SSH connection
+  ansible.builtin.include_tasks: test/test_ssh_connection.yml
+
+- name: Display switch details
+  ansible.builtin.include_tasks: test/display_switch_details.yml

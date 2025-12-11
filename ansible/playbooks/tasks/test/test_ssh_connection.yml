@@ -1,0 +1,10 @@
+---
+# Test SSH connection and gather minimal facts
+- name: Test SSH connection and gather minimal facts
+  cisco.ios.ios_facts:
+    gather_subset: min
+  register: connectivity_test_result
+
+- name: Display connection success
+  ansible.builtin.debug:
+    msg: "✓ Successfully connected to {{ connectivity_test_result.ansible_facts.ansible_net_hostname }} ({{ inventory_hostname }})"

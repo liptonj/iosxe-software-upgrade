@@ -1,0 +1,29 @@
+---
+# Backup running configuration to Ansible controller
+- name: Create local backup directory
+  ansible.builtin.file:
+    path: "{{ backup_dir }}"
+    state: directory
+    mode: "0755"
+  delegate_to: localhost
+  run_once: true
+  when: backup_enabled | bool
+
+- name: Backup running configuration to Ansible controller
+  cisco.ios.ios_config:
+    backup: true
+    backup_options:
+      filename: "{{ inventory_hostname }}_running-config_{{ backup_timestamp }}.cfg"
+      dir_path: "{{ backup_dir }}"
+  register: backup_result
+  when: backup_enabled | bool and not (dry_run | bool)
+
+- name: Dry-run message - Backup skipped
+  ansible.builtin.debug:
+    msg: "[DRY-RUN] Would backup configuration to {{ backup_dir }}/{{ inventory_hostname }}_running-config_{{ backup_timestamp }}.cfg"
+  when: backup_enabled | bool and dry_run | bool
+
+- name: Display backup location
+  ansible.builtin.debug:
+    msg: "✓ Configuration backed up to: {{ backup_result.backup_path | default('N/A') }}"
+  when: backup_enabled | bool and backup_result.backup_path is defined

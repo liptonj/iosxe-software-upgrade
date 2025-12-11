@@ -4,69 +4,54 @@
   gather_facts: false
   vars:
     target_version: "17.15.04"
+    required_space_mb: 2048
+
+    # Model mappings
+    target_versions_by_model:
+      C9200: "17.15.04"
+      C9200CX: "17.15.04"
+      C9200L: "17.15.04"
+      C9300: "17.15.04"
+      C9300X: "17.15.04"
+      C9350: "17.15.04"
+      C9400: "17.15.04"
+      C9500: "17.15.04"
+      C9500X: "17.15.04"
+
+    image_files_by_model:
+      C9200: "cat9k_iosxe.17.15.04.SPA.bin"
+      C9200CX: "cat9k_iosxe.17.15.04.SPA.bin"
+      C9200L: "cat9k_iosxe.17.15.04.SPA.bin"
+      C9300: "cat9k_iosxe.17.15.04.SPA.bin"
+      C9300X: "cat9k_iosxe.17.15.04.SPA.bin"
+      C9350: "cat9k_iosxe.17.15.04.SPA.bin"
+      C9400: "cat9k_iosxe.17.15.04.SPA.bin"
+      C9500: "cat9k_iosxe.17.15.04.SPA.bin"
+      C9500X: "cat9k_iosxe.17.15.04.SPA.bin"
 
   tasks:
-    - name: Gather hardware facts
-      cisco.ios.ios_facts:
-        gather_subset: hardware
-      register: facts_output
+    # Gather facts and detect model
+    - name: Gather switch facts
+      ansible.builtin.include_tasks: tasks/common/gather_switch_facts.yml
 
-    - name: Display current version
-      ansible.builtin.debug:
-        msg: |
-          Hostname: {{ facts_output.ansible_facts.ansible_net_hostname }}
-          Current Version: {{ facts_output.ansible_facts.ansible_net_version }}
-          Model: {{ facts_output.ansible_facts.ansible_net_model }}
-          Serial: {{ facts_output.ansible_facts.ansible_net_serialnum }}
+    - name: Detect model
+      ansible.builtin.include_tasks: tasks/common/detect_model.yml
 
+    - name: Select version and image
+      ansible.builtin.include_tasks: tasks/common/select_version_and_image.yml
+
+    # Check boot mode
     - name: Check boot mode
-      cisco.ios.ios_command:
-        commands:
-          - show version | include INSTALL|BUNDLE
-      register: boot_mode_check
+      ansible.builtin.include_tasks: tasks/boot/check_boot_mode.yml
 
-    - name: Display boot mode
-      ansible.builtin.debug:
-        msg: "Boot Mode: {{ boot_mode_check.stdout[0] }}"
-
-    - name: Check if bundle mode
-      ansible.builtin.set_fact:
-        is_bundle_mode: "{{ 'BUNDLE' in boot_mode_check.stdout[0] }}"
-        is_install_mode: "{{ 'INSTALL' in boot_mode_check.stdout[0] }}"
-
-    - name: Boot mode status
-      ansible.builtin.debug:
-        msg: |
-          Bundle Mode: {{ is_bundle_mode }}
-          Install Mode: {{ is_install_mode }}
-
+    # Check flash space
     - name: Check flash space
-      cisco.ios.ios_command:
-        commands:
-          - dir flash: | include bytes free
-      register: flash_space
+      ansible.builtin.include_tasks: tasks/flash/check_flash_space.yml
 
-    - name: Parse and display flash space
-      ansible.builtin.set_fact:
-        flash_free_bytes: "{{ flash_space.stdout[0] | regex_search('(\\d+) bytes free', '\\1') | first }}"
+    # Check if upgrade needed
+    - name: Check upgrade needed
+      ansible.builtin.include_tasks: tasks/verify/check_upgrade_needed.yml
 
-    - name: Display flash space in MB
-      ansible.builtin.debug:
-        msg: "Available Flash Space: {{ (flash_free_bytes | int / 1024 / 1024) | int }} MB"
-
-    - name: Check if upgrade needed
-      ansible.builtin.debug:
-        msg: "{{ 'Upgrade needed: ' ~ target_version ~ ' not found in current version' if target_version not in facts_output.ansible_facts.ansible_net_version else 'Already at target version ' ~ target_version }}"
-
-    - name: Summary
-      ansible.builtin.debug:
-        msg: |
-          ===========================================
-          Switch: {{ facts_output.ansible_facts.ansible_net_hostname }}
-          Current: {{ facts_output.ansible_facts.ansible_net_version }}
-          Target: {{ target_version }}
-          Boot Mode: {{ 'Bundle' if is_bundle_mode else 'Install' }}
-          Flash Free: {{ (flash_free_bytes | int / 1024 / 1024) | int }} MB
-          Upgrade Needed: {{ 'Yes' if target_version not in facts_output.ansible_facts.ansible_net_version else 'No' }}
-          ===========================================
-
+    # Display summary
+    - name: Display summary
+      ansible.builtin.include_tasks: tasks/verify/display_status_summary.yml

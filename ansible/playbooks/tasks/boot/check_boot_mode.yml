@@ -1,0 +1,20 @@
+---
+# Check if switch is in INSTALL or BUNDLE mode
+- name: Check boot mode (INSTALL vs BUNDLE)
+  cisco.ios.ios_command:
+    commands:
+      - "show version | include INSTALL|BUNDLE"
+  register: boot_mode_check
+
+- name: Display boot mode
+  ansible.builtin.debug:
+    msg: "Boot mode: {{ boot_mode_check.stdout[0] }}"
+
+- name: Determine if in bundle mode
+  ansible.builtin.set_fact:
+    is_bundle_mode: "{{ 'BUNDLE' in boot_mode_check.stdout[0] }}"
+    is_install_mode: "{{ 'INSTALL' in boot_mode_check.stdout[0] }}"
+
+- name: Display boot mode status
+  ansible.builtin.debug:
+    msg: "Bundle Mode: {{ is_bundle_mode }}, Install Mode: {{ is_install_mode }}"

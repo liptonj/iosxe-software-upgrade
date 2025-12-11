@@ -1,0 +1,20 @@
+---
+# Backup configuration before upgrade (uses atomic tasks)
+- name: Create backup timestamp
+  ansible.builtin.include_tasks: backup/create_backup_timestamp.yml
+
+- name: Backup running config
+  ansible.builtin.include_tasks: backup/backup_running_config.yml
+
+- name: Backup startup config
+  ansible.builtin.include_tasks: backup/backup_startup_config.yml
+
+- name: Save configuration summary
+  ansible.builtin.include_tasks: backup/save_config_summary.yml
+
+- name: FTP backup (optional)
+  ansible.builtin.include_tasks: backup/ftp_backup.yml
+  when: backup_to_ftp | bool
+
+- name: Display backup summary
+  ansible.builtin.include_tasks: backup/display_backup_summary.yml

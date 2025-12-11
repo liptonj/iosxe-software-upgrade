@@ -7,6 +7,11 @@ Automated upgrade playbook for Cisco Catalyst 9300 switches running IOS-XE using
 ## Features
 
 - ✅ **Automatic configuration backup** before upgrades
+- ✅ **Automatic model detection** and image file selection
+- ✅ **Per-model version mapping** (different versions for different models)
+- ✅ **Dry-run mode** to test workflow without changes
+- ✅ **Multiple execution modes** (serial, batched, parallel)
+- ✅ **Modular task structure** for easy maintenance (NEW ⭐)
 - ✅ Automated version checking and upgrade
 - ✅ Bundle to Install mode conversion
 - ✅ Flash space verification
@@ -14,7 +19,23 @@ Automated upgrade playbook for Cisco Catalyst 9300 switches running IOS-XE using
 - ✅ FTP-based image transfer
 - ✅ Post-upgrade verification
 - ✅ Standalone backup playbook for anytime backups
+- ✅ Support for multiple switch models (9200, 9300, 9400, 9500)
 - ✅ Uses only native `cisco.ios` collection modules
+
+## Playbook Architecture
+
+**Fully Modular & Atomic Design** for maximum maintainability and reusability:
+
+- **Main playbook** (`upgrade_ios_xe.yml`) - Clean orchestrator (~100 lines)
+- **23 atomic tasks** - Organized by function (common, backup, boot, flash, install, test, verify)
+- **10 aggregators** - Group related atomic tasks
+- **All playbooks** - Use the same atomic tasks (no duplication)
+
+Each atomic task handles ONE responsibility and can be reused in any playbook.
+
+📖 **See [ARCHITECTURE.md](ARCHITECTURE.md) for complete architecture overview**  
+📖 **See [REFACTORING.md](REFACTORING.md) for details on task structure**  
+📖 **See [tasks/STRUCTURE.md](ansible/playbooks/tasks/STRUCTURE.md) for atomic task organization**
 
 ## Prerequisites
 
@@ -129,21 +150,84 @@ ansible-playbook ansible/playbooks/upgrade_ios_xe.yml -i ansible/inventory.ini -
 ansible-playbook ansible/playbooks/upgrade_ios_xe.yml -i ansible/inventory.ini --check
 ```
 
-### Execute Upgrade
+### Test Upgrade Workflow (Dry-Run) 🔍
+
+**IMPORTANT**: Always test with dry-run first!
 
 ```bash
-# Run the upgrade playbook
-ansible-playbook ansible/playbooks/upgrade_ios_xe.yml -i ansible/inventory.ini
+# Dry-run - Test WITHOUT making changes
+make upgrade-dry-run
 
-# With vault-encrypted variables
-ansible-playbook ansible/playbooks/upgrade_ios_xe.yml -i ansible/inventory.ini --ask-vault-pass
+# Dry-run on specific switch
+make upgrade-dry-run LIMIT=switch01
 
-# Limit to specific switches
-ansible-playbook ansible/playbooks/upgrade_ios_xe.yml -i ansible/inventory.ini --limit switch01
-
-# Verbose output for troubleshooting
-ansible-playbook ansible/playbooks/upgrade_ios_xe.yml -i ansible/inventory.ini -vvv
+# Or use ansible-playbook directly
+ansible-playbook ansible/playbooks/upgrade_ios_xe.yml \
+  -i ansible/inventory.ini \
+  -e "dry_run=true" \
+  --ask-vault-pass
 ```
+
+**Dry-run shows what WOULD happen:**
+
+- ✅ Checks version and boot mode
+- ✅ Verifies flash space
+- ✅ Shows what would be backed up
+- ✅ Shows what would be cleaned
+- ✅ Shows what would be transferred
+- ✅ Shows estimated downtime
+- ❌ Does NOT make any changes
+- ❌ Does NOT transfer files
+- ❌ Does NOT upgrade switches
+
+### Execute Upgrade (Live Mode) ⚡
+
+**After testing with dry-run, choose an execution mode:**
+
+#### Serial Mode (RECOMMENDED for Production) 🛡️
+
+```bash
+# Upgrade ONE switch at a time (safest)
+make upgrade-serial
+
+# Stops immediately if any switch fails
+# Expected duration: N switches × 40 minutes
+```
+
+#### Batched Mode (2 at a time)
+
+```bash
+# Upgrade 2 switches at a time
+make upgrade-batch
+
+# Waits for both before starting next batch
+# Aborts if >25% fail
+```
+
+#### Parallel Mode (Fastest, Higher Risk)
+
+```bash
+# Upgrade up to 5 switches simultaneously
+make upgrade
+
+# ⚠️ WARNING: Multiple switches down at once
+# Use only in lab/test environments
+```
+
+#### Single Switch
+
+```bash
+# Upgrade one specific switch
+make upgrade LIMIT=switch01
+
+# Or use ansible-playbook directly
+ansible-playbook ansible/playbooks/upgrade_ios_xe.yml \
+  -i ansible/inventory.ini \
+  --limit switch01 \
+  --ask-vault-pass
+```
+
+📖 **For detailed execution strategies and failure handling**, see [EXECUTION_MODES.md](EXECUTION_MODES.md)
 
 ## Configuration Backup
 
@@ -201,6 +285,91 @@ backup_to_ftp: false
 ```
 
 **📖 For complete backup and restore procedures**, see [BACKUP_RESTORE.md](BACKUP_RESTORE.md)
+
+## Multi-Model Support
+
+### Automatic Model Detection
+
+The playbook **automatically detects** your switch model and selects the appropriate image file!
+
+**Supported Models:**
+
+- Catalyst 9200 Series: C9200, C9200CX, C9200L
+- Catalyst 9300 Series: C9300, C9300X
+- Catalyst 9350 Series: C9350
+- Catalyst 9400 Series: C9400
+- Catalyst 9500 Series: C9500, C9500X
+
+### How It Works
+
+1. Playbook gathers facts from switch
+2. Detects model family (C9200, C9300, etc.)
+3. Looks up image file in `image_files_by_model` dictionary
+4. Falls back to default `image_file` if model not mapped
+
+### Configure Model-Specific Versions and Images
+
+In `ansible/group_vars/switches.yml`:
+
+```yaml
+# Defaults
+target_version: "17.15.04"
+image_file: "cat9k_iosxe.17.15.04.SPA.bin"
+
+# Model-specific version mapping (optional)
+target_versions_by_model:
+  C9200: "17.15.04"
+  C9200CX: "17.15.04"
+  C9200L: "17.15.04"
+  C9300: "17.15.04"
+  C9300X: "17.15.04"
+  C9350: "17.15.04"
+  C9400: "17.15.04"
+  C9500: "17.15.04"
+  C9500X: "17.15.04"
+  # C3850: "16.12.10"  # Older models may require different version
+
+# Model-specific image mapping (optional)
+image_files_by_model:
+  C9200: "cat9k_iosxe.17.15.04.SPA.bin"
+  C9200CX: "cat9k_iosxe.17.15.04.SPA.bin"
+  C9200L: "cat9k_iosxe.17.15.04.SPA.bin"
+  C9300: "cat9k_iosxe.17.15.04.SPA.bin"
+  C9300X: "cat9k_iosxe.17.15.04.SPA.bin"
+  C9350: "cat9k_iosxe.17.15.04.SPA.bin"
+  C9400: "cat9k_iosxe.17.15.04.SPA.bin"
+  C9500: "cat9k_iosxe.17.15.04.SPA.bin"
+  C9500X: "cat9k_iosxe.17.15.04.SPA.bin"
+  # C3850: "cat3k_caa-universalk9.16.12.10.SPA.bin"
+```
+
+**Example: Mixed versions for different models**
+
+```yaml
+target_versions_by_model:
+  C9300: "17.15.04" # Latest for 9300
+  C9400: "17.12.01" # Core switches stay on stable release
+  C3850: "16.12.10" # Older model, different version entirely
+
+image_files_by_model:
+  C9300: "cat9k_iosxe.17.15.04.SPA.bin"
+  C9400: "cat9k_iosxe.17.12.01.SPA.bin"
+  C3850: "cat3k_caa-universalk9.16.12.10.SPA.bin"
+```
+
+### Per-Switch Overrides
+
+For individual switches with unique requirements, create host_vars:
+
+**File:** `ansible/host_vars/special-switch.yml`
+
+```yaml
+---
+image_file: "cat9k_iosxe.17.09.04.SPA.bin"
+target_version: "17.09.04"
+```
+
+📖 **See [ansible/host_vars/README.md](ansible/host_vars/README.md) for more examples**
 
 ## Playbook Workflow
 

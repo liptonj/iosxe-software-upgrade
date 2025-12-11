@@ -17,6 +17,7 @@ nano ansible/group_vars/switches.yml
 ```
 
 **Update these values:**
+
 - `ansible_user`: Your switch username
 - `ansible_password`: Your switch password
 - `ansible_become_password`: Your enable password
@@ -46,6 +47,7 @@ vim ansible/inventory.ini
 ```
 
 Add your switches:
+
 ```ini
 [switches]
 switch01 ansible_host=10.1.1.10
@@ -67,12 +69,14 @@ make test-connectivity
 ### What's Committed to Git
 
 ✅ **Committed** (safe to share):
+
 - `switches.yml.template` - Template with placeholders
 - All playbooks
 - Documentation
 - Makefile, setup scripts
 
 ❌ **NOT Committed** (in .gitignore):
+
 - `switches.yml` - Your actual encrypted variables
 - `.vault_pass` - Vault password file
 - `backups/` - Configuration backups
@@ -114,11 +118,13 @@ ansible-vault rekey ansible/group_vars/switches.yml
 ### For New Team Members
 
 **Give them:**
+
 1. ✅ Access to this git repository
 2. ✅ The vault password (via secure channel - NOT git!)
 3. ✅ FTP server details (if not in template)
 
 **They run:**
+
 ```bash
 # 1. Clone repo
 git clone <repository-url>
@@ -140,6 +146,7 @@ ansible-vault encrypt ansible/group_vars/switches.yml
 ### Sharing the Encrypted File
 
 **Option 1**: Share the pre-encrypted file
+
 ```bash
 # Copy the encrypted file to new team member
 # They use the same vault password
@@ -147,11 +154,12 @@ scp ansible/group_vars/switches.yml teammate@host:~/project/ansible/group_vars/
 ```
 
 **Option 2**: Use different vault passwords per environment
+
 ```bash
 # Dev environment
 ansible-vault encrypt ansible/group_vars/switches.yml --vault-id dev@prompt
 
-# Prod environment  
+# Prod environment
 ansible-vault encrypt ansible/group_vars/switches.yml --vault-id prod@prompt
 ```
 
@@ -160,12 +168,14 @@ ansible-vault encrypt ansible/group_vars/switches.yml --vault-id prod@prompt
 ### 1. Never Commit Unencrypted Credentials
 
 ❌ **DON'T**:
+
 ```bash
 git add ansible/group_vars/switches.yml  # If unencrypted!
 git commit -m "Added credentials"  # DANGER!
 ```
 
 ✅ **DO**:
+
 ```bash
 # Always verify file is encrypted first
 head -1 ansible/group_vars/switches.yml
@@ -177,6 +187,7 @@ git add ansible/group_vars/switches.yml  # OK if encrypted
 ### 2. Separate Vault Passwords
 
 Different passwords for different environments:
+
 - Dev: `dev-vault-password`
 - Staging: `staging-vault-password`
 - Production: `production-vault-password`
@@ -184,12 +195,14 @@ Different passwords for different environments:
 ### 3. Store Vault Password Securely
 
 **Good options:**
+
 - Password manager (1Password, LastPass, etc.)
 - CI/CD secrets (GitHub Secrets, Jenkins Credentials)
 - HashiCorp Vault
 - Team password vault
 
 **Bad options:**
+
 - ❌ Slack/Teams messages
 - ❌ Email
 - ❌ Sticky notes
@@ -214,6 +227,7 @@ ansible-vault rekey ansible/group_vars/switches.yml
 ### "switches.yml not found"
 
 You need to create it from the template:
+
 ```bash
 cp ansible/group_vars/switches.yml.template ansible/group_vars/switches.yml
 vim ansible/group_vars/switches.yml
@@ -267,4 +281,3 @@ git status  # switches.yml should NOT appear
 ---
 
 **Remember**: The template is for reference only. Always use the encrypted `switches.yml` file! 🔐
-

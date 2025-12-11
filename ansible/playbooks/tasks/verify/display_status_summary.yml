@@ -1,0 +1,14 @@
+---
+# Display comprehensive status summary
+- name: Comprehensive status summary
+  ansible.builtin.debug:
+    msg: |
+      ===========================================
+      Switch: {{ facts_output.ansible_facts.ansible_net_hostname }}
+      Current: {{ facts_output.ansible_facts.ansible_net_version }}
+      Target: {{ selected_target_version }}
+      Boot Mode: {{ 'Bundle' if is_bundle_mode else 'Install' }}
+      Flash Free: {{ flash_free_mb }} MB
+      Upgrade Needed: {{ 'Yes' if upgrade_needed | default(true) else 'No' }}
+      ===========================================
+

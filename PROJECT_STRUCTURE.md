@@ -3,38 +3,81 @@
 ## Directory Layout
 
 ```
-ios-xe-code-upgrad/
+iosxe-software-upgrade/
 ├── ansible/
 │   ├── playbooks/
-│   │   ├── upgrade_ios_xe.yml           # Main upgrade playbook
-│   │   ├── test_connectivity.yml        # Test SSH connectivity
-│   │   ├── test_version_check.yml       # Check versions and boot mode
-│   │   └── test_flash_space.yml         # Verify flash space
+│   │   ├── upgrade_ios_xe.yml           # Main upgrade playbook (modular, ~100 lines)
+│   │   ├── backup_configs.yml           # Standalone backup (modular)
+│   │   ├── test_connectivity.yml        # SSH connectivity test (modular)
+│   │   ├── test_version_check.yml       # Version & boot mode check (modular)
+│   │   ├── test_flash_space.yml         # Flash space check (modular)
+│   │   └── tasks/                       # Atomic task modules
+│   │       ├── common/                  # Shared utilities (4 tasks)
+│   │       ├── backup/                  # Backup operations (6 tasks)
+│   │       ├── boot/                    # Boot mode tasks (2 tasks)
+│   │       ├── flash/                   # Flash operations (5 tasks)
+│   │       ├── install/                 # Installation tasks (2 tasks)
+│   │       ├── test/                    # Testing tasks (2 tasks)
+│   │       ├── verify/                  # Verification tasks (2 tasks)
+│   │       ├── 01-08_*.yml              # Aggregator tasks (8 files)
+│   │       └── README.md                # Task documentation
 │   ├── group_vars/
-│   │   └── switches.yml                 # Variables (ENCRYPT THIS!)
+│   │   ├── switches.yml                 # Variables (ENCRYPTED!)
+│   │   └── switches.yml.template        # Template (safe to commit)
+│   ├── host_vars/                       # Per-switch overrides
+│   │   └── README.md                    # Host vars guide
 │   ├── inventory.ini                    # Switch inventory
 │   ├── requirements.yml                 # Ansible collection requirements
 │   └── VAULT_EXAMPLE.md                 # Vault usage guide
+├── backups/                             # Configuration backups (gitignored)
+├── .vscode/                             # VS Code configuration
 ├── .gitignore                           # Git ignore patterns
 ├── .cursorignore                        # Cursor AI ignore patterns
+├── ansible.cfg                          # Ansible configuration
+├── BACKUP_RESTORE.md                    # Backup/restore guide
 ├── CHANGELOG.md                         # Version history
-├── Makefile                             # Common commands
+├── EXECUTION_MODES.md                   # Serial/parallel/batch modes
+├── Makefile                             # Linux/Mac commands
+├── MULTI_MODEL_EXAMPLE.md               # Multi-model scenarios
 ├── PROJECT_STRUCTURE.md                 # This file
 ├── QUICK_REFERENCE.md                   # Quick command reference
 ├── README.md                            # Main documentation
+├── REFACTORING.md                       # Modular architecture guide
+├── requirements.txt                     # Python dependencies
+├── run.ps1                              # Windows PowerShell commands
 ├── SECURITY.md                          # Security guidelines
-└── TESTING.md                           # Testing procedures
+├── SETUP_INSTRUCTIONS.md                # First-time setup
+├── setup_venv.bat                       # Windows setup wrapper
+├── setup_venv.ps1                       # Windows PowerShell setup
+├── setup_venv.sh                        # Linux/Mac setup
+├── TESTING.md                           # Testing procedures
+└── WINDOWS.md                           # Windows-specific guide
 ```
 
 ## File Descriptions
 
 ### Main Playbook
 
-**`ansible/playbooks/upgrade_ios_xe.yml`**
+**`ansible/playbooks/upgrade_ios_xe.yml`** (~100 lines)
+- **Modular architecture** - orchestrates atomic task files
 - Primary automation playbook for IOS-XE upgrades
 - Handles both bundle and install mode switches
 - Includes pre-flight checks, image transfer, installation, and verification
+- Uses 23 atomic task modules from `tasks/` directory
 - Target version: 17.15.04 (configurable)
+
+### Atomic Task Modules
+
+**`ansible/playbooks/tasks/`**
+- **23 atomic, reusable task files** organized by function
+- `common/` (4 tasks) - Facts gathering, model detection
+- `backup/` (6 tasks) - Complete backup operations
+- `boot/` (2 tasks) - Boot mode management
+- `flash/` (5 tasks) - Flash space operations  
+- `install/` (2 tasks) - Installation preparation
+- `test/` (2 tasks) - Connectivity testing
+- `verify/` (2 tasks) - Upgrade verification
+- Each task file is small (<50 lines), focused, and reusable
 
 ### Configuration Files
 
@@ -54,24 +97,34 @@ ios-xe-code-upgrad/
 - cisco.ios collection (≥5.0.0)
 - ansible.netcommon collection (≥5.0.0)
 
-### Test Playbooks
+### Test Playbooks (All Modular)
 
-**`ansible/playbooks/test_connectivity.yml`**
+**`ansible/playbooks/test_connectivity.yml`** (~12 lines)
+- **Modular** - uses atomic tasks from `tasks/test/`
 - Tests SSH connectivity to switches
 - Gathers basic facts (hostname, version, model, serial)
 - Use before running upgrade to verify access
 
-**`ansible/playbooks/test_version_check.yml`**
-- Checks current IOS-XE version
+**`ansible/playbooks/test_version_check.yml`** (~58 lines)
+- **Modular** - uses atomic tasks from `tasks/common/`, `tasks/boot/`, `tasks/flash/`, `tasks/verify/`
+- Checks current IOS-XE version with model detection
 - Detects boot mode (bundle vs install)
 - Displays flash space
 - Determines if upgrade is needed
 
-**`ansible/playbooks/test_flash_space.yml`**
+**`ansible/playbooks/test_flash_space.yml`** (~24 lines)
+- **Modular** - uses atomic tasks from `tasks/flash/`
 - Detailed flash storage analysis
-- Lists files on flash
-- Calculates space usage and availability
-- Provides recommendations
+- Lists old IOS images on flash
+- Calculates space usage and availability percentages
+- Provides actionable recommendations
+
+**`ansible/playbooks/backup_configs.yml`** (~64 lines)
+- **Modular** - uses atomic tasks from `tasks/backup/`, `tasks/common/`
+- Complete configuration backup solution
+- Backs up running-config, startup-config, and detailed summary
+- Optional FTP backup
+- Can be run independently anytime
 
 ### Documentation
 

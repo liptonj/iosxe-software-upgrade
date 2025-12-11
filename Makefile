@@ -1,4 +1,4 @@
-.PHONY: help install test-syntax test-connectivity upgrade check-version lint clean backup backup-list restore-info
+.PHONY: help install test-syntax test-connectivity upgrade upgrade-serial upgrade-batch upgrade-dry-run check-version lint clean backup backup-list restore-info
 
 # Variables
 PLAYBOOK := ansible/playbooks/upgrade_ios_xe.yml
@@ -28,7 +28,10 @@ help:
 	@echo "  make restore-info      - Display restore instructions"
 	@echo ""
 	@echo "Upgrade Operations:"
-	@echo "  make upgrade           - Run upgrade playbook (use LIMIT=switch01 for single)"
+	@echo "  make upgrade-dry-run   - Test upgrade workflow WITHOUT making changes"
+	@echo "  make upgrade           - Run upgrade (parallel - up to 5 switches at once)"
+	@echo "  make upgrade-serial    - Run upgrade ONE switch at a time (RECOMMENDED)"
+	@echo "  make upgrade-batch     - Run upgrade 2 switches at a time"
 	@echo ""
 	@echo "Maintenance:"
 	@echo "  make lint              - Run ansible-lint on playbook"
@@ -37,8 +40,11 @@ help:
 	@echo "Examples:"
 	@echo "  make backup                    # Backup all switch configs"
 	@echo "  make backup LIMIT=switch01     # Backup single switch"
-	@echo "  make upgrade LIMIT=switch01    # Upgrade single switch"
-	@echo "  make upgrade LIMIT=dc1-*       # Upgrade switches matching pattern"
+	@echo "  make upgrade-dry-run           # Test upgrade WITHOUT changes"
+	@echo "  make upgrade-serial            # Upgrade all switches ONE at a time (SAFE)"
+	@echo "  make upgrade-serial LIMIT=dc1-*  # Upgrade DC switches one at a time"
+	@echo "  make upgrade-batch             # Upgrade 2 at a time"
+	@echo "  make upgrade LIMIT=switch01    # Upgrade single switch (parallel mode)"
 
 install:
 	@echo "Installing Ansible and collections..."
@@ -63,11 +69,50 @@ check-version:
 		$(VAULT_PASS)
 
 upgrade:
-	@echo "Running IOS-XE upgrade playbook..."
+	@echo "Running IOS-XE upgrade playbook (parallel)..."
 	@echo "Target: $(LIMIT)"
+	@echo "⚠️  Switches will upgrade in parallel (up to 5 at a time)"
+	@echo "⚠️  Use 'make upgrade-serial' for safer one-at-a-time upgrades"
 	ansible-playbook $(PLAYBOOK) \
 		-i $(INVENTORY) \
 		--limit $(LIMIT) \
+		$(VAULT_PASS) \
+		-vv
+
+upgrade-serial:
+	@echo "Running IOS-XE upgrade playbook (serial - one at a time)..."
+	@echo "Target: $(LIMIT)"
+	@echo "🔄 Upgrading ONE switch at a time (safest - recommended for production)"
+	@echo "🛡️  Will stop immediately if any switch fails"
+	ansible-playbook $(PLAYBOOK) \
+		-i $(INVENTORY) \
+		--limit $(LIMIT) \
+		-e "serial_mode=1" \
+		-e "fail_fast=true" \
+		$(VAULT_PASS) \
+		-vv
+
+upgrade-batch:
+	@echo "Running IOS-XE upgrade playbook (batched - 2 at a time)..."
+	@echo "Target: $(LIMIT)"
+	@echo "📦 Upgrading 2 switches at a time, waiting for both before next batch"
+	@echo "🛡️  Will abort if more than 25%% of switches fail"
+	ansible-playbook $(PLAYBOOK) \
+		-i $(INVENTORY) \
+		--limit $(LIMIT) \
+		-e "serial_mode=2" \
+		-e "max_fail_pct=25" \
+		$(VAULT_PASS) \
+		-vv
+
+upgrade-dry-run:
+	@echo "Running IOS-XE upgrade playbook in DRY-RUN mode..."
+	@echo "Target: $(LIMIT)"
+	@echo "🔍 DRY-RUN: No changes will be made to switches"
+	ansible-playbook $(PLAYBOOK) \
+		-i $(INVENTORY) \
+		--limit $(LIMIT) \
+		-e "dry_run=true" \
 		$(VAULT_PASS) \
 		-vv
 

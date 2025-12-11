@@ -1,0 +1,57 @@
+---
+# Get and save detailed configuration summary
+- name: Get configuration summary
+  cisco.ios.ios_command:
+    commands:
+      - "show running-config | include hostname|interface|ip route|vlan|boot"
+      - "show version | include uptime|Version|Model"
+      - show ip interface brief
+      - show vlan brief
+  register: config_details
+
+- name: Save detailed configuration summary
+  ansible.builtin.copy:
+    content: |
+      ==========================================
+      Configuration Backup Summary
+      ==========================================
+      Backup Date: {{ lookup('pipe', 'date -u +%Y-%m-%dT%H:%M:%SZ') }}
+      Hostname: {{ inventory_hostname }}
+      IP Address: {{ ansible_host }}
+      Switch Model: {{ facts_output.ansible_facts.ansible_net_model }}
+      IOS-XE Version: {{ facts_output.ansible_facts.ansible_net_version }}
+      Serial Number: {{ facts_output.ansible_facts.ansible_net_serialnum }}
+
+      ==========================================
+      Key Configuration Elements
+      ==========================================
+      {{ config_details.stdout[0] }}
+
+      ==========================================
+      Version and Uptime
+      ==========================================
+      {{ config_details.stdout[1] }}
+
+      ==========================================
+      Interface Summary
+      ==========================================
+      {{ config_details.stdout[2] }}
+
+      ==========================================
+      VLAN Summary
+      ==========================================
+      {{ config_details.stdout[3] }}
+
+      ==========================================
+      Files:
+      - Running Config: {{ inventory_hostname }}_running-config_{{ backup_timestamp }}.cfg
+      - Startup Config: {{ inventory_hostname }}_startup-config_{{ backup_timestamp }}.cfg
+      - Summary: {{ inventory_hostname }}_summary_{{ backup_timestamp }}.txt
+      ==========================================
+    dest: "{{ backup_dir }}/{{ inventory_hostname }}_summary_{{ backup_timestamp }}.txt"
+  delegate_to: localhost
+
+- name: Display summary save status
+  ansible.builtin.debug:
+    msg: "✓ Configuration summary saved to {{ backup_dir }}/{{ inventory_hostname }}_summary_{{ backup_timestamp }}.txt"
+

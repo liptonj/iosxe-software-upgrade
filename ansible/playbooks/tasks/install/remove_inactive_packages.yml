@@ -1,0 +1,26 @@
+---
+# Remove inactive packages to free up flash space
+- name: Remove inactive packages (install mode only)
+  cisco.ios.ios_command:
+    commands:
+      - command: install remove inactive
+        prompt:
+          - 'Do you want to remove the above files\? \[y/n\]'
+        answer:
+          - "y"
+  register: install_remove_output
+  vars:
+    ansible_command_timeout: 600
+  when: not (is_bundle_mode | bool) and not (dry_run | bool)
+  ignore_errors: true
+
+- name: Dry-run message - Remove inactive skipped
+  ansible.builtin.debug:
+    msg: "[DRY-RUN] Would run 'install remove inactive' to free up flash space"
+  when: not (is_bundle_mode | bool) and dry_run | bool
+
+- name: Display cleanup result
+  ansible.builtin.debug:
+    msg: "{{ '[DRY-RUN] Would remove inactive packages' if dry_run | bool else ('No old files found' if 'No extra package' in (install_remove_output.stdout[0] | default('')) else 'Old files removed - flash space freed') }}"
+  when: not (is_bundle_mode | bool)
+

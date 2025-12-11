@@ -1,0 +1,21 @@
+---
+# Backup startup configuration
+- name: Get startup configuration
+  cisco.ios.ios_command:
+    commands:
+      - show startup-config
+  register: startup_config
+
+- name: Save startup configuration
+  ansible.builtin.copy:
+    content: "{{ startup_config.stdout[0] }}"
+    dest: "{{ backup_dir }}/{{ inventory_hostname }}_startup-config_{{ backup_timestamp }}.cfg"
+  delegate_to: localhost
+  register: startup_save_result
+  failed_when: false
+
+- name: Display startup backup status
+  ansible.builtin.debug:
+    msg: "✓ Startup config saved: {{ startup_save_result.dest | default('N/A') }}"
+  when: startup_save_result is defined and startup_save_result.changed
+

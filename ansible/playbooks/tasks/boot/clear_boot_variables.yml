@@ -1,0 +1,28 @@
+---
+# Clear boot system variables (needed for bundle-to-install conversion)
+- name: Get current boot system configuration
+  cisco.ios.ios_command:
+    commands:
+      - "show running-config | include boot system"
+  register: boot_config
+
+- name: Display current boot configuration
+  ansible.builtin.debug:
+    msg: "Current boot config: {{ boot_config.stdout[0] if boot_config.stdout[0] | length > 0 else 'No boot variables configured' }}"
+
+- name: Clear all boot system variables
+  cisco.ios.ios_config:
+    lines:
+      - no boot system
+    save_when: modified
+  when: boot_config.stdout[0] | length > 0 and not (dry_run | bool)
+
+- name: Dry-run message - Boot variable clear skipped
+  ansible.builtin.debug:
+    msg: "[DRY-RUN] Would clear boot variables: {{ boot_config.stdout[0] }}"
+  when: boot_config.stdout[0] | length > 0 and dry_run | bool
+
+- name: Confirm boot variables cleared
+  ansible.builtin.debug:
+    msg: "{{ '[DRY-RUN] Would clear' if dry_run | bool else 'Cleared' }} boot variables. Install mode conversion will happen during install process."
+  when: boot_config.stdout[0] | length > 0

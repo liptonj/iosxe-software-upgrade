@@ -1,0 +1,40 @@
+---
+# Backup configurations to FTP server (optional)
+- name: Copy running-config to FTP
+  cisco.ios.ios_command:
+    commands:
+      - command: "copy running-config ftp://{{ ftp_username }}:{{ ftp_password }}@{{ ftp_host }}/backups/{{ inventory_hostname }}_running-config_{{ backup_timestamp }}.cfg"
+        prompt:
+          - "Address or name of remote host"
+          - "Destination filename"
+        answer:
+          - "{{ ftp_host }}"
+          - "backups/{{ inventory_hostname }}_running-config_{{ backup_timestamp }}.cfg"
+  register: ftp_running_backup
+  when: backup_to_ftp | bool
+  ignore_errors: true
+
+- name: Copy startup-config to FTP
+  cisco.ios.ios_command:
+    commands:
+      - command: "copy startup-config ftp://{{ ftp_username }}:{{ ftp_password }}@{{ ftp_host }}/backups/{{ inventory_hostname }}_startup-config_{{ backup_timestamp }}.cfg"
+        prompt:
+          - "Address or name of remote host"
+          - "Destination filename"
+        answer:
+          - "{{ ftp_host }}"
+          - "backups/{{ inventory_hostname }}_startup-config_{{ backup_timestamp }}.cfg"
+  register: ftp_startup_backup
+  when: backup_to_ftp | bool
+  ignore_errors: true
+
+- name: FTP backup status
+  ansible.builtin.debug:
+    msg: "✓ FTP backup completed to {{ ftp_host }}"
+  when: backup_to_ftp | bool and (ftp_running_backup is succeeded or ftp_startup_backup is succeeded)
+
+- name: FTP backup failed
+  ansible.builtin.debug:
+    msg: "⚠️ FTP backup failed or skipped (continuing)"
+  when: backup_to_ftp | bool and ftp_running_backup is failed and ftp_startup_backup is failed
+

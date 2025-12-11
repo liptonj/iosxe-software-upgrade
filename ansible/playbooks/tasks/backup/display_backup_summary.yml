@@ -1,0 +1,19 @@
+---
+# Display backup completion summary
+- name: Backup completion summary
+  ansible.builtin.debug:
+    msg: |
+      ==========================================
+      Backup Completed Successfully
+      ==========================================
+      Switch: {{ inventory_hostname }}
+      Timestamp: {{ backup_timestamp }}
+
+      Local Files Created:
+      - {{ backup_dir }}/{{ inventory_hostname }}_running-config_{{ backup_timestamp }}.cfg
+      - {{ backup_dir }}/{{ inventory_hostname }}_startup-config_{{ backup_timestamp }}.cfg
+      - {{ backup_dir }}/{{ inventory_hostname }}_summary_{{ backup_timestamp }}.txt
+
+      {{ 'FTP Backup: Completed' if backup_to_ftp | bool else 'FTP Backup: Disabled' }}
+      ==========================================
+

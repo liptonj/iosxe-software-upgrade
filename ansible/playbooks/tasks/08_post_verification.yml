@@ -1,0 +1,51 @@
+---
+# Post-upgrade verification
+- name: Gather facts after upgrade
+  cisco.ios.ios_facts:
+    gather_subset: hardware
+  register: post_upgrade_facts
+  when: not (dry_run | bool) and (reconnect_result is not defined or reconnect_result is succeeded)
+  ignore_errors: true
+
+- name: Verify new version
+  ansible.builtin.debug:
+    msg: "✅ Upgrade successful! New version is {{ post_upgrade_facts.ansible_facts.ansible_net_version }}"
+  when:
+    - not (dry_run | bool)
+    - post_upgrade_facts is defined
+    - post_upgrade_facts is succeeded
+    - selected_target_version in post_upgrade_facts.ansible_facts.ansible_net_version
+
+- name: Verify boot mode is now INSTALL
+  cisco.ios.ios_command:
+    commands:
+      - "show version | include INSTALL"
+  register: post_boot_mode
+  when: not (dry_run | bool)
+
+- name: Display post-upgrade boot mode
+  ansible.builtin.debug:
+    msg: "Post-upgrade boot mode: {{ post_boot_mode.stdout[0] }}"
+  when: not (dry_run | bool) and post_boot_mode is defined
+
+- name: Fail if version verification fails
+  ansible.builtin.fail:
+    msg: "Upgrade verification failed. Expected {{ selected_target_version }}, but got {{ post_upgrade_facts.ansible_facts.ansible_net_version }}"
+  when: not (dry_run | bool) and selected_target_version not in post_upgrade_facts.ansible_facts.ansible_net_version
+
+- name: Final success message
+  ansible.builtin.debug:
+    msg: "{{ '[DRY-RUN COMPLETE] Would upgrade from ' ~ facts_output.ansible_facts.ansible_net_version ~ ' to ' ~ selected_target_version ~ '. Switch would be in INSTALL mode.' if dry_run | bool else 'IOS-XE upgrade to ' ~ selected_target_version ~ ' completed successfully. Switch is now in INSTALL mode.' }}"
+  when: not (dry_run | bool) and (reconnect_result is not defined or reconnect_result is succeeded)
+
+- name: Final failure message
+  ansible.builtin.debug:
+    msg: |
+      ❌ Upgrade failed for {{ inventory_hostname }}
+      - Switch did not come back online after reboot
+      - Check console access for manual recovery
+      - Configuration backup available in: {{ backup_dir }}/{{ inventory_hostname }}_running-config_{{ backup_timestamp }}.cfg
+  when:
+    - not (dry_run | bool)
+    - reconnect_result is defined
+    - reconnect_result is failed

@@ -1,0 +1,19 @@
+---
+# List old IOS images on flash
+- name: Check for old IOS images
+  cisco.ios.ios_command:
+    commands:
+      - "dir flash: | include .bin"
+  register: ios_images
+  ignore_errors: true
+
+- name: Display IOS images found
+  ansible.builtin.debug:
+    msg: "{{ ios_images.stdout_lines[0] }}"
+  when: ios_images.stdout | length > 0
+
+- name: No images found
+  ansible.builtin.debug:
+    msg: "No .bin files found on flash"
+  when: ios_images.stdout | length == 0
+

@@ -64,13 +64,26 @@ make backup-list
 make restore-info
 ```
 
-### Run Upgrade
+### Test Upgrade (Dry-Run) 🔍
+
+```bash
+# Test upgrade workflow WITHOUT making changes
+make upgrade-dry-run
+
+# Test specific switch
+make upgrade-dry-run LIMIT=switch01
+```
+
+### Run Upgrade (Live) ⚡
 
 ```bash
 # Standard execution (includes automatic backup)
 ansible-playbook ansible/playbooks/upgrade_ios_xe.yml \
   -i ansible/inventory.ini \
   --ask-vault-pass
+
+# Using Makefile
+make upgrade LIMIT=switch01
 
 # Single switch
 ansible-playbook ansible/playbooks/upgrade_ios_xe.yml \
@@ -95,7 +108,10 @@ ansible-playbook ansible/playbooks/upgrade_ios_xe.yml \
 # Check versions
 .\run.ps1 check-version
 
-# Run upgrade
+# Test upgrade (dry-run)
+.\run.ps1 upgrade-dry-run switch01
+
+# Run upgrade (live)
 .\run.ps1 upgrade switch01
 
 # List backups

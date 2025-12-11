@@ -1,0 +1,30 @@
+---
+# Select appropriate version and image file based on model
+- name: Select appropriate target version for switch model
+  ansible.builtin.set_fact:
+    selected_target_version: "{{ target_versions_by_model[model_family] | default(target_version) }}"
+  when: model_family is defined and model_family != None
+
+- name: Use default target version if model not mapped
+  ansible.builtin.set_fact:
+    selected_target_version: "{{ target_version }}"
+  when: model_family is not defined or model_family == None
+
+- name: Select appropriate image file for switch model
+  ansible.builtin.set_fact:
+    selected_image_file: "{{ image_files_by_model[model_family] | default(image_file) }}"
+  when: model_family is defined and model_family != None
+
+- name: Use default image file if model not mapped
+  ansible.builtin.set_fact:
+    selected_image_file: "{{ image_file }}"
+  when: model_family is not defined or model_family == None
+
+- name: Display selected version and image
+  ansible.builtin.debug:
+    msg: |
+      Switch Model: {{ facts_output.ansible_facts.ansible_net_model }}
+      Model Family: {{ model_family | default('Unknown') }}
+      Current Version: {{ facts_output.ansible_facts.ansible_net_version }}
+      Target Version: {{ selected_target_version }}
+      Image File: {{ selected_image_file }}

@@ -1,0 +1,25 @@
+---
+# Check flash space and fail if insufficient
+- name: Check available flash space
+  cisco.ios.ios_command:
+    commands:
+      - "dir flash: | include bytes free"
+  register: flash_space_output
+
+- name: Parse flash space
+  ansible.builtin.set_fact:
+    flash_free_bytes: "{{ flash_space_output.stdout[0] | regex_search('(\\d+) bytes free', '\\1') | first }}"
+
+- name: Convert to MB
+  ansible.builtin.set_fact:
+    flash_free_mb: "{{ (flash_free_bytes | int / 1024 / 1024) | int }}"
+
+- name: Display available flash space
+  ansible.builtin.debug:
+    msg: "Available flash space: {{ flash_free_mb }} MB (Required: {{ required_space_mb }} MB)"
+
+- name: Fail if insufficient flash space
+  ansible.builtin.fail:
+    msg: "Insufficient flash space. Available: {{ flash_free_mb }} MB, Required: {{ required_space_mb }} MB"
+  when: flash_free_mb | int < required_space_mb | int
+

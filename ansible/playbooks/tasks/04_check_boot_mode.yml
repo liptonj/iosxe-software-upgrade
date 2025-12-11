@@ -1,0 +1,8 @@
+---
+# Check boot mode and clear boot variables if in bundle mode (uses atomic tasks)
+- name: Check boot mode
+  ansible.builtin.include_tasks: boot/check_boot_mode.yml
+
+- name: Clear boot variables if in bundle mode
+  ansible.builtin.include_tasks: boot/clear_boot_variables.yml
+  when: is_bundle_mode | bool

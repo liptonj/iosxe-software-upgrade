@@ -1,0 +1,11 @@
+---
+# Gather hardware facts from switch
+- name: Gather facts from switch
+  cisco.ios.ios_facts:
+    gather_subset: hardware
+  register: facts_output
+
+- name: Display current version
+  ansible.builtin.debug:
+    msg: "Current IOS-XE version is {{ facts_output.ansible_facts.ansible_net_version }}"
+

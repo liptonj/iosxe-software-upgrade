@@ -1,0 +1,9 @@
+---
+# Detect switch model family (C9200, C9300, etc.)
+- name: Detect switch model family
+  ansible.builtin.set_fact:
+    model_family: "{{ facts_output.ansible_facts.ansible_net_model | regex_search('C9(200|300|350|400|500)[A-Z]*') }}"
+
+- name: Display detected model family
+  ansible.builtin.debug:
+    msg: "Detected model family: {{ model_family | default('Unknown - will use defaults') }}"

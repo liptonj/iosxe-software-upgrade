@@ -1,0 +1,10 @@
+---
+# Check if upgrade is needed
+- name: Check if upgrade needed
+  ansible.builtin.debug:
+    msg: "{{ 'Upgrade needed: ' ~ selected_target_version ~ ' not found in current version' if selected_target_version not in facts_output.ansible_facts.ansible_net_version else 'Already at target version ' ~ selected_target_version }}"
+
+- name: Set upgrade needed flag
+  ansible.builtin.set_fact:
+    upgrade_needed: "{{ selected_target_version not in facts_output.ansible_facts.ansible_net_version }}"
+

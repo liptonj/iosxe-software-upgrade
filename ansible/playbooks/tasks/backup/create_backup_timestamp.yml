@@ -1,0 +1,11 @@
+---
+# Create timestamp for backup files
+- name: Create backup timestamp
+  ansible.builtin.set_fact:
+    backup_timestamp: "{{ lookup('pipe', 'date +%Y%m%dT%H%M%S') }}"
+  when: backup_enabled | bool
+
+- name: Display backup timestamp
+  ansible.builtin.debug:
+    msg: "Backup timestamp: {{ backup_timestamp }}"
+  when: backup_enabled | bool

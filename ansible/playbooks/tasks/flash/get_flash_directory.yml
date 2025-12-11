@@ -1,0 +1,12 @@
+---
+# Get full flash directory listing
+- name: Get flash directory listing
+  cisco.ios.ios_command:
+    commands:
+      - "dir flash:"
+  register: flash_dir
+
+- name: Display flash contents
+  ansible.builtin.debug:
+    msg: "{{ flash_dir.stdout_lines[0] }}"
+

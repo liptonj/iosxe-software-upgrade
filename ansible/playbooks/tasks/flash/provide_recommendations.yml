@@ -1,0 +1,23 @@
+---
+# Provide recommendations based on flash space
+- name: Check if sufficient space
+  ansible.builtin.assert:
+    that:
+      - flash_free_mb | int >= required_space_mb | int
+    success_msg: "✓ Sufficient flash space available ({{ flash_free_mb }} MB >= {{ required_space_mb }} MB)"
+    fail_msg: "✗ Insufficient flash space ({{ flash_free_mb }} MB < {{ required_space_mb }} MB). Free up space before upgrade."
+  ignore_errors: true
+
+- name: Provide recommendations
+  ansible.builtin.debug:
+    msg: |
+      Recommendations:
+      {% if flash_free_mb | int < required_space_mb | int %}
+      - Free up {{ required_space_mb | int - flash_free_mb | int }} MB before upgrade
+      - Consider removing old IOS images or unused files
+      - Run 'install remove inactive' to clean up old packages
+      {% else %}
+      - Flash space is sufficient for upgrade
+      - Proceed with confidence
+      {% endif %}
+

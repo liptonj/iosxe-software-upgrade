@@ -1,0 +1,20 @@
+---
+# Save running-config to startup-config
+- name: Save running configuration to startup configuration
+  cisco.ios.ios_command:
+    commands:
+      - command: copy running-config startup-config
+        prompt: 'Destination filename \[startup-config\]\?'
+        answer: "\r"
+  register: save_config_output
+  when: not (dry_run | bool)
+
+- name: Dry-run message - Save config skipped
+  ansible.builtin.debug:
+    msg: "[DRY-RUN] Would save running-config to startup-config"
+  when: dry_run | bool
+
+- name: Display save config result
+  ansible.builtin.debug:
+    msg: "{{ '[DRY-RUN] Would save' if dry_run | bool else 'Saved' }} running-config to startup-config"
+

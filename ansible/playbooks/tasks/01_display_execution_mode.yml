@@ -1,0 +1,16 @@
+---
+# Display execution mode status (dry-run, serial, parallel)
+- name: Display execution mode status
+  ansible.builtin.debug:
+    msg: |
+      ==========================================
+      {{ '🔍 DRY-RUN MODE ENABLED' if dry_run | bool else '⚡ LIVE MODE - Changes will be made' }}
+      ==========================================
+      {{ 'No changes will be made to switches' if dry_run | bool else 'This will upgrade switches and cause reboots' }}
+      {{ 'Use this to test the workflow safely' if dry_run | bool else 'Ensure you have a maintenance window' }}
+      ==========================================
+      Execution Strategy: {{ 'Serial (one at a time)' if serial_mode | default('100%') == '1' else ('Batched (' ~ serial_mode ~ ' at a time)' if serial_mode | default('100%') | string | regex_search('^\d+$') else 'Parallel (all switches)') }}
+      Max Failures Allowed: {{ max_fail_pct | default(100) }}%
+      Fail Fast: {{ fail_fast | default(false) }}
+      ==========================================
+  run_once: true

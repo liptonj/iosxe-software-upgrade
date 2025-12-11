@@ -1,0 +1,10 @@
+---
+# Prepare switch for upgrade (uses atomic tasks)
+- name: Save running config to startup
+  ansible.builtin.include_tasks: install/save_running_to_startup.yml
+
+- name: Remove inactive packages
+  ansible.builtin.include_tasks: install/remove_inactive_packages.yml
+
+- name: Check flash space
+  ansible.builtin.include_tasks: flash/check_flash_space.yml

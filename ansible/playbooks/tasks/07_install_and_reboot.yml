@@ -1,0 +1,63 @@
+---
+# Install new image, activate, commit, and wait for reboot
+- name: Install and activate new IOS-XE image
+  cisco.ios.ios_command:
+    commands:
+      - command: "install add file flash:{{ selected_image_file }} activate commit"
+        prompt:
+          - 'This operation may require a reload of the system. Do you want to proceed\? \[y/n\]'
+        answer:
+          - "y"
+  register: install_activate_output
+  vars:
+    ansible_command_timeout: "{{ install_timeout }}"
+  when: not (dry_run | bool)
+
+- name: Dry-run message - Install skipped
+  ansible.builtin.debug:
+    msg: |
+      [DRY-RUN] Would execute: install add file flash:{{ selected_image_file }} activate commit
+      - Model: {{ facts_output.ansible_facts.ansible_net_model }}
+      - This would upgrade the switch from {{ facts_output.ansible_facts.ansible_net_version }} to {{ selected_target_version }}
+      - Switch would reboot automatically
+      - Estimated downtime: 30-45 minutes
+      - Boot mode would be: INSTALL
+  when: dry_run | bool
+
+- name: Display install output
+  ansible.builtin.debug:
+    var: install_activate_output.stdout_lines
+  when: not (dry_run | bool) and install_activate_output is defined
+
+- name: Wait for switch to reload
+  ansible.builtin.pause:
+    seconds: "{{ reboot_wait_timeout }}"
+  when: not (dry_run | bool)
+
+- name: Wait for switch to become reachable
+  ansible.builtin.wait_for_connection:
+    delay: 60
+    timeout: 600
+  when: not (dry_run | bool)
+  register: reconnect_result
+  ignore_errors: "{{ not (fail_fast | default(false) | bool) }}"
+
+- name: Report reconnection failure
+  ansible.builtin.debug:
+    msg: |
+      ⚠️  WARNING: Switch {{ inventory_hostname }} did not come back online!
+      - Waited 10 minutes (timeout: 600s)
+      - Check console access
+      - Verify switch rebooted successfully
+      - Manual intervention may be required
+  when:
+    - not (dry_run | bool)
+    - reconnect_result is failed
+
+- name: Fail if switch didn't reconnect and fail_fast is enabled
+  ansible.builtin.fail:
+    msg: "Switch {{ inventory_hostname }} failed to reconnect after upgrade. Aborting playbook."
+  when:
+    - not (dry_run | bool)
+    - reconnect_result is failed
+    - fail_fast | default(false) | bool

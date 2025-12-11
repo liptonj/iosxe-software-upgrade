@@ -19,8 +19,39 @@ ftp_username: ftpuser
 ftp_password: YOUR_FTP_PASSWORD_HERE
 
 # IOS-XE Upgrade Configuration
+# Default target version (used if model-specific not found)
 target_version: "17.15.04"
+
+# Default image file (used if model-specific not found)
 image_file: "cat9k_iosxe.17.15.04.SPA.bin"
+
+# Model-specific version mapping (optional)
+# Useful when different models need different IOS versions
+target_versions_by_model:
+  C9200: "17.15.04"
+  C9200CX: "17.15.04"
+  C9200L: "17.15.04"
+  C9300: "17.15.04"
+  C9300X: "17.15.04"
+  C9350: "17.15.04"
+  C9400: "17.15.04"
+  C9500: "17.15.04"
+  C9500X: "17.15.04"
+  # C3850: "16.12.10"  # Example: older models on different version
+
+# Model-specific image files (optional)
+# Playbook auto-detects model and uses appropriate image
+image_files_by_model:
+  C9200: "cat9k_iosxe.17.15.04.SPA.bin"
+  C9200CX: "cat9k_iosxe.17.15.04.SPA.bin"
+  C9200L: "cat9k_iosxe.17.15.04.SPA.bin"
+  C9300: "cat9k_iosxe.17.15.04.SPA.bin"
+  C9300X: "cat9k_iosxe.17.15.04.SPA.bin"
+  C9350: "cat9k_iosxe.17.15.04.SPA.bin"
+  C9400: "cat9k_iosxe.17.15.04.SPA.bin"
+  C9500: "cat9k_iosxe.17.15.04.SPA.bin"
+  C9500X: "cat9k_iosxe.17.15.04.SPA.bin"
+  # C3850: "cat3k_caa-universalk9.16.12.10.SPA.bin"  # Example for older models
 
 # Backup Configuration
 backup_enabled: true

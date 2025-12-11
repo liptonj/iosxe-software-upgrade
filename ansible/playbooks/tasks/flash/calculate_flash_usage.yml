@@ -1,0 +1,37 @@
+---
+# Calculate flash usage statistics
+- name: Extract flash statistics
+  cisco.ios.ios_command:
+    commands:
+      - "dir flash: | include bytes"
+  register: flash_stats
+
+- name: Display flash statistics
+  ansible.builtin.debug:
+    msg: "{{ flash_stats.stdout[0] }}"
+
+- name: Parse flash space
+  ansible.builtin.set_fact:
+    flash_free_bytes: "{{ flash_stats.stdout[0] | regex_search('(\\d+) bytes free', '\\1') | first }}"
+    flash_total_bytes: "{{ flash_stats.stdout[0] | regex_search('(\\d+) bytes total', '\\1') | first }}"
+
+- name: Calculate flash usage
+  ansible.builtin.set_fact:
+    flash_free_mb: "{{ (flash_free_bytes | int / 1024 / 1024) | int }}"
+    flash_total_mb: "{{ (flash_total_bytes | int / 1024 / 1024) | int }}"
+    flash_used_mb: "{{ ((flash_total_bytes | int - flash_free_bytes | int) / 1024 / 1024) | int }}"
+    flash_used_percent: "{{ (((flash_total_bytes | int - flash_free_bytes | int) / flash_total_bytes | int) * 100) | int }}"
+
+- name: Display flash summary
+  ansible.builtin.debug:
+    msg: |
+      ===========================================
+      Flash Storage Summary
+      ===========================================
+      Total Space: {{ flash_total_mb }} MB
+      Used Space:  {{ flash_used_mb }} MB ({{ flash_used_percent }}%)
+      Free Space:  {{ flash_free_mb }} MB
+      Required:    {{ required_space_mb }} MB
+      Status:      {{ 'SUFFICIENT' if flash_free_mb | int >= required_space_mb | int else 'INSUFFICIENT' }}
+      ===========================================
+
