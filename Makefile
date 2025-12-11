@@ -6,6 +6,13 @@ INVENTORY := ansible/inventory.ini
 VAULT_PASS := --ask-vault-pass
 LIMIT ?= all
 
+# Suppress warnings
+export ANSIBLE_DEPRECATION_WARNINGS=False
+export ANSIBLE_COMMAND_WARNINGS=False
+export ANSIBLE_ACTION_WARNINGS=False
+export ANSIBLE_SYSTEM_WARNINGS=False
+export ANSIBLE_LOCALHOST_WARNING=False
+
 help:
 	@echo "Cisco IOS-XE Upgrade Automation - Available Commands:"
 	@echo ""

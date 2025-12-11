@@ -3,6 +3,7 @@
 .vault_pass
 .vault_password
 vault_password.txt
+ansible/group_vars/switches.yml  # Encrypted vars file - use switches.yml.template instead
 
 # Environment variables
 .env
@@ -22,6 +23,7 @@ env/
 # Logs
 *.log
 ansible.log
+*.retry
 
 # IDE
 .vscode/
@@ -33,6 +35,8 @@ ansible.log
 # OS
 .DS_Store
 Thumbs.db
+desktop.ini
+$RECYCLE.BIN/
 
 # Sensitive data - NEVER commit these!
 *password*

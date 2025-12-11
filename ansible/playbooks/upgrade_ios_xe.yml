@@ -9,10 +9,14 @@
     install_timeout: 1200
     reboot_wait_timeout: 300
     backup_enabled: true
-    backup_dir: "./backups"
+    backup_dir_name: "backups"
     backup_to_ftp: false  # Set to true to also backup to FTP server
 
   tasks:
+    - name: Set backup directory to project root
+      ansible.builtin.set_fact:
+        backup_dir: "{{ playbook_dir }}/../../{{ backup_dir_name }}"
+      when: backup_enabled | bool
     - name: Gather facts from switch
       cisco.ios.ios_facts:
         gather_subset: hardware
@@ -36,7 +40,7 @@
     # ========================================
     - name: Create backup timestamp
       ansible.builtin.set_fact:
-        backup_timestamp: "{{ ansible_date_time.iso8601_basic_short }}"
+        backup_timestamp: "{{ lookup('pipe', 'date +%Y%m%dT%H%M%S') }}"
       when: backup_enabled | bool
 
     - name: Create local backup directory
@@ -65,16 +69,12 @@
     - name: Backup configuration to FTP server (optional)
       cisco.ios.ios_command:
         commands:
-          - command: "copy running-config ftp://{{ ftp_username }}:{{ ftp_password }}@{{ ftp_host }}/backups/{{ inventory_hostname }}_running-config_{{ backup_timestamp }}.cfg"
-            prompt:
-              - 'Address or name of remote host'
-              - 'Destination filename'
-            answer:
-              - "{{ ftp_host }}"
-              - "backups/{{ inventory_hostname }}_running-config_{{ backup_timestamp }}.cfg"
+          - "copy running-config ftp://{{ ftp_username }}:{{ ftp_password }}@{{ ftp_host }}/backups/{{ inventory_hostname }}_running-config_{{ backup_timestamp }}.cfg"
       when: backup_enabled | bool and backup_to_ftp | bool
       ignore_errors: true
       register: ftp_backup_result
+      vars:
+        ansible_command_timeout: 300
 
     - name: Display FTP backup result
       ansible.builtin.debug:
@@ -91,7 +91,7 @@
     - name: Save configuration summary
       ansible.builtin.copy:
         content: |
-          Backup Date: {{ ansible_date_time.iso8601 }}
+          Backup Date: {{ lookup('pipe', 'date -u +%Y-%m-%dT%H:%M:%SZ') }}
           Hostname: {{ inventory_hostname }}
           Switch Model: {{ facts_output.ansible_facts.ansible_net_model }}
           Current Version: {{ facts_output.ansible_facts.ansible_net_version }}

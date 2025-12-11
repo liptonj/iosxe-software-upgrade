@@ -2,6 +2,8 @@
 
 Automated upgrade playbook for Cisco Catalyst 9300 switches running IOS-XE using Ansible.
 
+**Platforms**: Linux, macOS, and Windows | **📘 Windows users**: See [WINDOWS.md](WINDOWS.md) for Windows-specific setup
+
 ## Features
 
 - ✅ **Automatic configuration backup** before upgrades
@@ -18,13 +20,29 @@ Automated upgrade playbook for Cisco Catalyst 9300 switches running IOS-XE using
 
 ### 1. Ansible Installation
 
-```bash
-# Install Ansible
-pip install ansible
+**Linux/macOS:**
 
-# Install Cisco IOS collection
+```bash
+# Run automated setup
+./setup_venv.sh
+
+# Or manually:
+pip install ansible
 ansible-galaxy collection install cisco.ios
 ```
+
+**Windows:**
+
+```powershell
+# Run automated setup
+.\setup_venv.bat
+
+# Or manually:
+pip install ansible
+ansible-galaxy collection install cisco.ios
+```
+
+📘 **Windows users**: See [WINDOWS.md](WINDOWS.md) for complete setup guide
 
 ### 2. Network Requirements
 
@@ -52,38 +70,52 @@ switch02 ansible_host=10.1.1.11
 switch03 ansible_host=10.1.1.12
 ```
 
-### 2. Variables Configuration
+### 2. Variables Configuration (IMPORTANT!)
 
-Edit `ansible/group_vars/switches.yml`:
+**Step 1**: Create your variables file from the template:
+
+```bash
+# Copy the template
+cp ansible/group_vars/switches.yml.template ansible/group_vars/switches.yml
+
+# Edit with your actual credentials
+vim ansible/group_vars/switches.yml
+```
+
+**Step 2**: Update these values in `switches.yml`:
 
 ```yaml
 # Switch credentials
 ansible_user: admin
-ansible_password: your_password
-ansible_become_password: your_enable_password
+ansible_password: YOUR_SWITCH_PASSWORD_HERE
+ansible_become_password: YOUR_ENABLE_PASSWORD_HERE
 
 # FTP Server Configuration
 ftp_host: 10.10.10.10
 ftp_username: ftpuser
-ftp_password: ftppassword
+ftp_password: YOUR_FTP_PASSWORD_HERE
 
 # Target version
 target_version: "17.15.04"
 image_file: "cat9k_iosxe.17.15.04.SPA.bin"
 ```
 
-### 3. Secure Credentials with Ansible Vault (Recommended)
+### 3. Encrypt Credentials (REQUIRED!)
 
-**IMPORTANT**: Never store plain-text passwords in production!
+**⚠️ CRITICAL**: Never commit unencrypted credentials to git!
 
 ```bash
-# Encrypt the entire variables file
+# Encrypt the variables file
 ansible-vault encrypt ansible/group_vars/switches.yml
 
-# Or encrypt individual strings
-ansible-vault encrypt_string 'your_password' --name 'ansible_password'
-ansible-vault encrypt_string 'ftp_password' --name 'ftp_password'
+# Enter a strong vault password when prompted
+# SAVE THIS PASSWORD SECURELY (password manager, team vault, etc.)
 ```
+
+**The `switches.yml` file is in `.gitignore`** - it won't be committed to git.  
+**The `switches.yml.template` is committed** - safe to share with team.
+
+📖 **For detailed setup instructions**, see [SETUP_INSTRUCTIONS.md](SETUP_INSTRUCTIONS.md)
 
 ## Usage
 

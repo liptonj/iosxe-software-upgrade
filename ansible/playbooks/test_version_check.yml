@@ -14,7 +14,7 @@
     - name: Display current version
       ansible.builtin.debug:
         msg: |
-          Hostname: {{ ansible_net_hostname }}
+          Hostname: {{ facts_output.ansible_facts.ansible_net_hostname }}
           Current Version: {{ facts_output.ansible_facts.ansible_net_version }}
           Model: {{ facts_output.ansible_facts.ansible_net_model }}
           Serial: {{ facts_output.ansible_facts.ansible_net_serialnum }}
@@ -62,7 +62,7 @@
       ansible.builtin.debug:
         msg: |
           ===========================================
-          Switch: {{ ansible_net_hostname }}
+          Switch: {{ facts_output.ansible_facts.ansible_net_hostname }}
           Current: {{ facts_output.ansible_facts.ansible_net_version }}
           Target: {{ target_version }}
           Boot Mode: {{ 'Bundle' if is_bundle_mode else 'Install' }}

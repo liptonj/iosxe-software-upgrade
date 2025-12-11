@@ -1,0 +1,34 @@
+---
+# Ansible connection settings for Cisco IOS switches
+ansible_connection: ansible.netcommon.network_cli
+ansible_network_os: cisco.ios.ios
+ansible_become: true
+ansible_become_method: enable
+
+# Switch credentials
+# SECURITY WARNING: Copy this file to switches.yml and encrypt with Ansible Vault!
+# DO NOT commit switches.yml to git - it's in .gitignore
+ansible_user: admin
+ansible_password: YOUR_SWITCH_PASSWORD_HERE
+ansible_become_password: YOUR_ENABLE_PASSWORD_HERE
+
+# FTP Server Configuration
+# SECURITY WARNING: Store FTP credentials in Ansible Vault in production!
+ftp_host: 10.10.10.10
+ftp_username: ftpuser
+ftp_password: YOUR_FTP_PASSWORD_HERE
+
+# IOS-XE Upgrade Configuration
+target_version: "17.15.04"
+image_file: "cat9k_iosxe.17.15.04.SPA.bin"
+
+# Backup Configuration
+backup_enabled: true
+backup_dir_name: "backups"
+backup_to_ftp: false  # Set to true to also backup configs to FTP server
+
+# Optional: Override default settings
+# required_space_mb: 2048
+# install_timeout: 1200
+# reboot_wait_timeout: 300
+

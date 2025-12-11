@@ -2,6 +2,7 @@
 .vault_pass
 .vault_password
 vault_password.txt
+ansible/group_vars/switches.yml
 *password*
 *secret*
 *credential*

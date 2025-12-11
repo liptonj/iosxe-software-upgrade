@@ -3,26 +3,41 @@
   hosts: switches
   gather_facts: false
   vars:
-    backup_dir: "./backups"
-    backup_to_ftp: false  # Set to true to also backup to FTP server
+    backup_dir_name: "backups"
+    backup_to_ftp: false # Set to true to also backup to FTP server
 
   tasks:
+    - name: Set backup directory to project root
+      ansible.builtin.set_fact:
+        backup_dir: "{{ playbook_dir }}/../../{{ backup_dir_name }}"
+
+    - name: Create backup timestamp
+      ansible.builtin.set_fact:
+        backup_timestamp: "{{ lookup('pipe', 'date +%Y%m%dT%H%M%S') }}"
+
     - name: Gather switch facts
       cisco.ios.ios_facts:
         gather_subset: hardware
       register: facts_output
 
-    - name: Create backup timestamp
-      ansible.builtin.set_fact:
-        backup_timestamp: "{{ ansible_date_time.iso8601_basic_short }}"
+    - name: Debug backup_dir variable
+      ansible.builtin.debug:
+        msg: "Backup directory will be: {{ backup_dir }}"
+      delegate_to: localhost
 
     - name: Create local backup directory
       ansible.builtin.file:
         path: "{{ backup_dir }}"
         state: directory
-        mode: '0755'
+        mode: "0755"
       delegate_to: localhost
       run_once: false
+      register: dir_create_result
+
+    - name: Verify directory created
+      ansible.builtin.debug:
+        msg: "Directory created/verified at: {{ backup_dir }}"
+      delegate_to: localhost
 
     - name: Display backup information
       ansible.builtin.debug:
@@ -56,6 +71,24 @@
         content: "{{ startup_config.stdout[0] }}"
         dest: "{{ backup_dir }}/{{ inventory_hostname }}_startup-config_{{ backup_timestamp }}.cfg"
       delegate_to: localhost
+      register: startup_save_result
+      failed_when: false
+
+    - name: Debug startup save
+      ansible.builtin.debug:
+        msg: "Startup save result - Changed: {{ startup_save_result.changed }}, Dest: {{ startup_save_result.dest | default('N/A') }}"
+      when: startup_save_result is defined
+
+    - name: Verify startup file exists
+      ansible.builtin.stat:
+        path: "{{ backup_dir }}/{{ inventory_hostname }}_startup-config_{{ backup_timestamp }}.cfg"
+      delegate_to: localhost
+      register: startup_file_check
+
+    - name: Report startup file status
+      ansible.builtin.debug:
+        msg: "Startup file exists: {{ startup_file_check.stat.exists }}, Size: {{ startup_file_check.stat.size | default(0) }} bytes"
+      when: startup_file_check.stat is defined
 
     - name: Get configuration summary
       cisco.ios.ios_command:
@@ -72,33 +105,33 @@
           ==========================================
           Configuration Backup Summary
           ==========================================
-          Backup Date: {{ ansible_date_time.iso8601 }}
+          Backup Date: {{ lookup('pipe', 'date -u +%Y-%m-%dT%H:%M:%SZ') }}
           Hostname: {{ inventory_hostname }}
           IP Address: {{ ansible_host }}
           Switch Model: {{ facts_output.ansible_facts.ansible_net_model }}
           IOS-XE Version: {{ facts_output.ansible_facts.ansible_net_version }}
           Serial Number: {{ facts_output.ansible_facts.ansible_net_serialnum }}
-          
+
           ==========================================
           Key Configuration Elements
           ==========================================
           {{ config_details.stdout[0] }}
-          
+
           ==========================================
           Version and Uptime
           ==========================================
           {{ config_details.stdout[1] }}
-          
+
           ==========================================
           Interface Summary
           ==========================================
           {{ config_details.stdout[2] }}
-          
+
           ==========================================
           VLAN Summary
           ==========================================
           {{ config_details.stdout[3] }}
-          
+
           ==========================================
           Files:
           - Running Config: {{ inventory_hostname }}_running-config_{{ backup_timestamp }}.cfg
@@ -107,32 +140,41 @@
           ==========================================
         dest: "{{ backup_dir }}/{{ inventory_hostname }}_summary_{{ backup_timestamp }}.txt"
       delegate_to: localhost
+      register: summary_save_result
+      failed_when: false
+
+    - name: Debug summary save
+      ansible.builtin.debug:
+        msg: "Summary save result - Changed: {{ summary_save_result.changed }}, Dest: {{ summary_save_result.dest | default('N/A') }}"
+
+    - name: Verify summary file exists
+      ansible.builtin.stat:
+        path: "{{ backup_dir }}/{{ inventory_hostname }}_summary_{{ backup_timestamp }}.txt"
+      delegate_to: localhost
+      register: summary_file_check
+
+    - name: Report summary file status
+      ansible.builtin.debug:
+        msg: "Summary file exists: {{ summary_file_check.stat.exists }}, Size: {{ summary_file_check.stat.size | default(0) }} bytes"
+      when: summary_file_check.stat is defined
 
     - name: Backup to FTP server (optional)
       block:
         - name: Copy running-config to FTP
           cisco.ios.ios_command:
             commands:
-              - command: "copy running-config ftp://{{ ftp_username }}:{{ ftp_password }}@{{ ftp_host }}/backups/{{ inventory_hostname }}_running-config_{{ backup_timestamp }}.cfg"
-                prompt:
-                  - 'Address or name of remote host'
-                  - 'Destination filename'
-                answer:
-                  - "{{ ftp_host }}"
-                  - "backups/{{ inventory_hostname }}_running-config_{{ backup_timestamp }}.cfg"
+              - "copy running-config ftp://{{ ftp_username }}:{{ ftp_password }}@{{ ftp_host }}/backups/{{ inventory_hostname }}_running-config_{{ backup_timestamp }}.cfg"
           register: ftp_running_backup
+          vars:
+            ansible_command_timeout: 300
 
         - name: Copy startup-config to FTP
           cisco.ios.ios_command:
             commands:
-              - command: "copy startup-config ftp://{{ ftp_username }}:{{ ftp_password }}@{{ ftp_host }}/backups/{{ inventory_hostname }}_startup-config_{{ backup_timestamp }}.cfg"
-                prompt:
-                  - 'Address or name of remote host'
-                  - 'Destination filename'
-                answer:
-                  - "{{ ftp_host }}"
-                  - "backups/{{ inventory_hostname }}_startup-config_{{ backup_timestamp }}.cfg"
+              - "copy startup-config ftp://{{ ftp_username }}:{{ ftp_password }}@{{ ftp_host }}/backups/{{ inventory_hostname }}_startup-config_{{ backup_timestamp }}.cfg"
           register: ftp_startup_backup
+          vars:
+            ansible_command_timeout: 300
 
         - name: FTP backup status
           ansible.builtin.debug:
@@ -149,12 +191,12 @@
           ==========================================
           Switch: {{ inventory_hostname }}
           Timestamp: {{ backup_timestamp }}
-          
+
           Local Files Created:
           - {{ backup_dir }}/{{ inventory_hostname }}_running-config_{{ backup_timestamp }}.cfg
           - {{ backup_dir }}/{{ inventory_hostname }}_startup-config_{{ backup_timestamp }}.cfg
           - {{ backup_dir }}/{{ inventory_hostname }}_summary_{{ backup_timestamp }}.txt
-          
+
           {{ 'FTP Backup: Completed' if backup_to_ftp | bool else 'FTP Backup: Disabled' }}
           ==========================================
 
@@ -162,26 +204,18 @@
   hosts: localhost
   gather_facts: false
   tasks:
-    - name: Generate backup inventory
-      ansible.builtin.find:
-        paths: "./backups"
-        patterns: "*_{{ hostvars[groups['switches'][0]].backup_timestamp }}*"
-      register: backup_files
-      when: groups['switches'] | length > 0
-
-    - name: Display backup inventory
+    - name: Display backup summary
       ansible.builtin.debug:
         msg: |
           ==========================================
           Backup Session Complete
           ==========================================
           Total switches backed up: {{ groups['switches'] | length }}
-          Total files created: {{ backup_files.matched | default(0) }}
           Backup directory: ./backups
-          
+
           To restore a configuration:
-          1. Review the backup files
+          1. Review the backup files in ./backups/
           2. Copy to switch: copy ftp://... running-config
           3. Or use: configure replace ftp://...
           ==========================================
-
+      when: groups['switches'] | length > 0

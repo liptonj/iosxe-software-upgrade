@@ -11,21 +11,21 @@
 
     - name: Display connection success
       ansible.builtin.debug:
-        msg: "Successfully connected to {{ ansible_net_hostname }} ({{ inventory_hostname }})"
+        msg: "Successfully connected to {{ facts_result.ansible_facts.ansible_net_hostname }} ({{ inventory_hostname }})"
 
     - name: Display IOS version
       ansible.builtin.debug:
-        msg: "IOS Version: {{ ansible_net_version }}"
+        msg: "IOS Version: {{ facts_result.ansible_facts.ansible_net_version }}"
 
     - name: Display model
       ansible.builtin.debug:
-        msg: "Model: {{ ansible_net_model }}"
+        msg: "Model: {{ facts_result.ansible_facts.ansible_net_model }}"
 
     - name: Display serial number
       ansible.builtin.debug:
-        msg: "Serial: {{ ansible_net_serialnum }}"
+        msg: "Serial: {{ facts_result.ansible_facts.ansible_net_serialnum }}"
 
     - name: Connectivity test summary
       ansible.builtin.debug:
-        msg: "✓ Connectivity test passed for {{ ansible_net_hostname }}"
+        msg: "✓ Connectivity test passed for {{ facts_result.ansible_facts.ansible_net_hostname }}"
 

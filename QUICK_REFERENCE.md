@@ -1,6 +1,10 @@
 # Quick Reference Card - IOS-XE Upgrade
 
+📘 **Windows users**: Replace `make` with `.\run.ps1` and see [WINDOWS.md](WINDOWS.md)
+
 ## One-Time Setup
+
+**Linux/macOS:**
 
 ```bash
 # 1. Install Ansible
@@ -21,7 +25,28 @@ vim ansible/group_vars/switches.yml
 ansible-vault encrypt ansible/group_vars/switches.yml
 ```
 
+**Windows (PowerShell):**
+
+```powershell
+# 1. Run setup
+.\setup_venv.bat
+
+# 2. Activate environment
+.\.venv\Scripts\Activate.ps1
+
+# 3. Configure inventory
+notepad ansible\inventory.ini
+
+# 4. Configure variables
+notepad ansible\group_vars\switches.yml
+
+# 5. Encrypt credentials
+ansible-vault encrypt ansible\group_vars\switches.yml
+```
+
 ## Daily Operations
+
+**Linux/macOS:**
 
 ### Backup Configurations
 
@@ -60,7 +85,26 @@ ansible-playbook ansible/playbooks/upgrade_ios_xe.yml \
   -vvv
 ```
 
+**Windows (PowerShell):**
+
+```powershell
+# Backup configs
+.\run.ps1 backup
+.\run.ps1 backup switch01
+
+# Check versions
+.\run.ps1 check-version
+
+# Run upgrade
+.\run.ps1 upgrade switch01
+
+# List backups
+.\run.ps1 backup-list
+```
+
 ### Pre-Flight Checks
+
+**Linux/macOS:**
 
 ```bash
 # Syntax check
@@ -122,20 +166,20 @@ backup_to_ftp: false
 ### Optional Variables (Override in playbook)
 
 ```yaml
-required_space_mb: 2048          # Min flash space required
-install_timeout: 1200            # Install command timeout (seconds)
-reboot_wait_timeout: 300         # Wait time after reboot (seconds)
+required_space_mb: 2048 # Min flash space required
+install_timeout: 1200 # Install command timeout (seconds)
+reboot_wait_timeout: 300 # Wait time after reboot (seconds)
 ```
 
 ## Common Issues & Solutions
 
-| Issue | Solution |
-|-------|----------|
-| "Insufficient flash space" | Free up space or reduce required_space_mb |
-| "Connection timeout" | Check SSH, firewall, credentials |
-| "FTP transfer failed" | Verify FTP server, network, VRF |
-| "Module not found" | Run: `ansible-galaxy collection install cisco.ios` |
-| "Vault password incorrect" | Check password, verify file is encrypted |
+| Issue                      | Solution                                           |
+| -------------------------- | -------------------------------------------------- |
+| "Insufficient flash space" | Free up space or reduce required_space_mb          |
+| "Connection timeout"       | Check SSH, firewall, credentials                   |
+| "FTP transfer failed"      | Verify FTP server, network, VRF                    |
+| "Module not found"         | Run: `ansible-galaxy collection install cisco.ios` |
+| "Vault password incorrect" | Check password, verify file is encrypted           |
 
 ## Playbook Workflow
 
@@ -155,6 +199,7 @@ reboot_wait_timeout: 300         # Wait time after reboot (seconds)
 ## Safety Checklist
 
 Before running upgrade:
+
 - [ ] Tested in lab environment
 - [ ] Maintenance window scheduled
 - [ ] Configuration backed up
@@ -236,4 +281,3 @@ ansible switches -i ansible/inventory.ini -m cisco.ios.ios_command -a "commands=
 ---
 
 **Remember**: Always test in lab first! 🧪
-

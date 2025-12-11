@@ -69,7 +69,26 @@ fi
 echo "Activating virtual environment..."
 source .venv/bin/activate
 
+# Install system dependencies for ansible-pylibssh (macOS only)
+if [[ "$OSTYPE" == "darwin"* ]]; then
+    echo ""
+    echo "Checking for libssh (optional - for ansible-pylibssh)..."
+    if ! brew list libssh &> /dev/null; then
+        echo "Installing libssh via Homebrew..."
+        brew install libssh
+        echo "✓ libssh installed"
+    else
+        echo "✓ libssh already installed"
+    fi
+    
+    # Set compiler flags for ansible-pylibssh installation
+    export LDFLAGS="-L$(brew --prefix libssh)/lib"
+    export CFLAGS="-I$(brew --prefix libssh)/include"
+    echo "✓ Compiler flags set for libssh"
+fi
+
 # Upgrade pip
+echo ""
 echo "Upgrading pip..."
 pip install --upgrade pip setuptools wheel
 
